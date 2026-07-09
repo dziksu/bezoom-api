@@ -43,30 +43,41 @@ async function bootstrap() {
     })
   );
 
-  const keycloakUrl = configService.get<string>('KEYCLOAK_URL', '');
+  // const keycloakUrl = configService.get<string>('KEYCLOAK_URL', '');
 
   const config = new DocumentBuilder()
     .setTitle('BeZoom API')
     .setDescription('BeZoom — local events discovery platform API')
     .setVersion('1.0')
-    .addOAuth2(
+    // .addOAuth2(
+    //   {
+    //     type: 'oauth2',
+    //     flows: {
+    //       authorizationCode: {
+    //         authorizationUrl: `${keycloakUrl}/realms/bezoom/protocol/openid-connect/auth`,
+    //         tokenUrl: `${keycloakUrl}/realms/bezoom/protocol/openid-connect/token`,
+    //         scopes: {
+    //           openid: 'openid',
+    //           profile: 'profile',
+    //           email: 'email'
+    //         }
+    //       }
+    //     }
+    //   },
+    //   'keycloak' // this name is referenced below and in @ApiBearerAuth()/@ApiOAuth2() decorators
+    // )
+    // .addSecurityRequirements('keycloak', ['openid', 'profile', 'email'])
+    .addBearerAuth(
       {
-        type: 'oauth2',
-        flows: {
-          authorizationCode: {
-            authorizationUrl: `${keycloakUrl}/realms/bezoom/protocol/openid-connect/auth`,
-            tokenUrl: `${keycloakUrl}/realms/bezoom/protocol/openid-connect/token`,
-            scopes: {
-              openid: 'openid',
-              profile: 'profile',
-              email: 'email'
-            }
-          }
-        }
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT', // Optional, helps the UI understand it's a JWT
+        name: 'JWT',
+        description: 'Enter your JWT token',
+        in: 'header'
       },
-      'keycloak' // this name is referenced below and in @ApiBearerAuth()/@ApiOAuth2() decorators
+      'JWT-auth' // This name is referenced in your @ApiBearerAuth('JWT-auth') decorator
     )
-    .addSecurityRequirements('keycloak', ['openid', 'profile', 'email'])
     .build();
 
   const documentFactory = () => SwaggerModule.createDocument(app, config);

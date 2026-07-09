@@ -6,8 +6,9 @@ import minioConfig from './shared/infrastructure/config/minio.config';
 import authConfig from './shared/infrastructure/config/auth.config';
 import throttleConfig from './shared/infrastructure/config/throttle.config';
 import { DrizzleModule } from './shared/infrastructure/drizzle.module';
+import { StorageModule } from './shared/infrastructure/storage/storage.module';
 import { HealthModule } from './modules/health/health.module';
-import { AuthGuard, KeycloakConnectModule, ResourceGuard, RoleGuard } from 'nest-keycloak-connect';
+import { AuthGuard, KeycloakConnectModule, RoleGuard } from 'nest-keycloak-connect';
 import { APP_GUARD } from '@nestjs/core';
 import { UserModule } from './modules/user/user.module';
 
@@ -29,6 +30,7 @@ import { UserModule } from './modules/user/user.module';
       })
     }),
     DrizzleModule,
+    StorageModule,
     HealthModule,
     UserModule
   ],
@@ -43,11 +45,6 @@ import { UserModule } from './modules/user/user.module';
     {
       provide: APP_GUARD,
       useClass: RoleGuard
-    },
-    // 3. Optional: Enables fine-grained resource/scope controls
-    {
-      provide: APP_GUARD,
-      useClass: ResourceGuard
     }
   ]
 })
