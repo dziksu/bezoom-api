@@ -1,0 +1,259 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Bezoom – Local Development Docker Compose
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# SERVICES
+#   postgres     – PostGIS-enabled PostgreSQL
+#   redis        – Redis (cache + message queue)
+#   minio        – S3-compatible object storage
+#   minio-init   – Creates required MinIO buckets on startup
+#   keycloak     – Identity & access management (SSO)
+#   mailpit      – Local SMTP server + web UI
+#   redis-commander – Redis GUI (queue browser)
+#   nominatim    – Geocoding (OSM) — first run downloads ~1 GB of OSM data
+#   redis-insight – Redis GUI (profiler + CLI)
+#
+# QUICK START
+#   cp .env.example .env.local
+#   docker compose up -d                      # start all services
+#
+# PORTS OVERVIEW
+#   5432  – PostgreSQL
+#   6379  – Redis
+#   9000  – MinIO S3 API
+#   9001  – MinIO Console  → http://localhost:9001
+#   8080  – Keycloak       → http://localhost:8080
+#   1025  – Mailpit SMTP
+#   8025  – Mailpit Web UI → http://localhost:8025
+#   3010  – Redis Commander → http://localhost:3010
+#   8082  – Nominatim      → http://localhost:8082
+#   8001  – Redis Insight  → http://localhost:8001
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# LICENSING NOTE: Redis 8.0+ uses a tri-license (RSALv2 / SSPLv1 / AGPLv3)
+# instead of the old 3-clause BSD from 7.x. This is fine for local dev, but
+# review the license before using in production.
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: bezoom
+
+services:
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # DATABASE
+  # ───────────────────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgis/postgis:16-3.5-alpine
+    platform: linux/amd64   # multi-arch image; amd64 runs via Rosetta on Apple Silicon
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bezoom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bezoom_dev}
+      POSTGRES_DB: bezoom
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bezoom} -d bezoom"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # PgBouncer (connection pooling) — not needed for local dev.
+  # In production, deploy via Coolify using the edoburu/pgbouncer image.
+  # App services connect directly to postgres:5432 in local dev.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # CACHE + MESSAGE QUEUE
+  # ───────────────────────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy noeviction
+      --requirepass ${REDIS_PASSWORD:-redis_dev}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # OBJECT STORAGE (S3-compatible)
+  # ───────────────────────────────────────────────────────────────────────────
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_dev}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Creates required buckets after MinIO is ready
+  minio-init:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_dev}
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD;
+        mc mb --ignore-existing local/raw-uploads;
+        mc mb --ignore-existing local/media;
+        mc ilm rule add --expiry-days 1 local/raw-uploads;
+        mc anonymous set download local/media;
+        echo 'MinIO buckets initialized';
+        exit 0;
+      "
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # AUTHENTICATION (Keycloak)
+  # ───────────────────────────────────────────────────────────────────────────
+
+  keycloak:
+    image: keycloak/keycloak:latest
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-changeme}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER:-bezoom}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-bezoom_dev}
+      KC_PROXY: edge
+      KC_HOSTNAME_STRICT: "false"
+      KEYCLOAK_IMPORT: /opt/keycloak/data/import/realm.json
+    ports:
+      - "${KEYCLOAK_HTTP_PORT:-8080}:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # EMAIL (local SMTP + web UI)
+  # ───────────────────────────────────────────────────────────────────────────
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_DATABASE: /data/mailpit.db
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    volumes:
+      - mailpit_data:/data
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # QUEUE BROWSER – Redis Commander (GUI for Redis data + BullMQ keys)
+  # ───────────────────────────────────────────────────────────────────────────
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    platform: linux/amd64   # no native arm64 image; runs via Rosetta on Apple Silicon
+    restart: unless-stopped
+    ports:
+      - "${REDIS_COMMANDER_PORT:-3010}:8081"
+    environment:
+      REDIS_HOSTS: "local:redis:6379:0:${REDIS_PASSWORD:-redis_dev}"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  nominatim:
+    image: mediagis/nominatim:5.3
+    restart: unless-stopped
+    environment:
+      PBF_URL: ${NOMINATIM_PBF_URL:-https://download.geofabrik.de/europe/poland-latest.osm.pbf}
+      REPLICATION_URL: https://download.geofabrik.de/europe/poland-updates/
+      NOMINATIM_PASSWORD: ${NOMINATIM_DB_PASSWORD:-nominatim_dev}
+      IMPORT_WIKIPEDIA: "false"
+      IMPORT_ADDRESS_ONLY: "true"
+      THREADS: "4"
+    ports:
+      - "${NOMINATIM_PORT:-8082}:8080"
+    volumes:
+      - nominatim_data:/var/lib/postgresql/16/main
+    shm_size: 2gb
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # DEV TOOLS  (profile: tools)
+  # ───────────────────────────────────────────────────────────────────────────
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    restart: unless-stopped
+    ports:
+      - "${REDIS_INSIGHT_PORT:-8001}:5540"
+    volumes:
+      - redis_insight_data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VOLUMES
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  mailpit_data:
+    driver: local
+  keycloak_data:
+    driver: local
+  nominatim_data:
+    driver: local
+  redis_insight_data:
+    driver: local
+
+# ─────────────────────────────────────────────────────────────────────────────
+# NETWORKS  (default bridge is fine for local dev)
+# ─────────────────────────────────────────────────────────────────────────────
+networks:
+  default:
+    name: bezoom_dev
