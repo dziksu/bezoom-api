@@ -41,7 +41,7 @@ export const events = pgTable('events', {
   category: eventCategoryEnum('category').notNull(),
   startDate: timestamp('start_date', { withTimezone: true }).notNull(),
   endDate: timestamp('end_date', { withTimezone: true }),
-  organizerId: uuid('organizer_id').notNull(),
+  organizerKeycloakSub: text('organizer_keycloak_sub').notNull(),
   imageUrl: text('image_url'),
   // Pricing
   priceType: priceTypeEnum('price_type'),

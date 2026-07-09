@@ -2,7 +2,7 @@ import { pgTable, uuid, text, timestamp, boolean } from 'drizzle-orm/pg-core';
 
 export const notifications = pgTable('notifications', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull(),
+  keycloakSub: text('keycloak_sub').notNull(),
   type: text('type', {
     enum: [
       'EVENT_INVITATION',

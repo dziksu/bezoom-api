@@ -19,13 +19,20 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "prettier:write": "prettier --cache --write \"./**/*.{js,jsx,ts,tsx,json}\"",
-    "prettier:check": "prettier --cache --check \"./**/*.{js,jsx,ts,tsx,json}\""
+    "prettier:check": "prettier --cache --check \"./**/*.{js,jsx,ts,tsx,json}\"",
+    "db:studio": "npx drizzle-kit studio",
+    "db:generate": "npx drizzle-kit generate",
+    "db:migrate": "npx drizzle-kit migrate",
+    "db:push": "npx drizzle-kit push"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
+    "@nestjs/cqrs": "^11.0.3",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.4.5",
     "class-transformer": "^0.5.1",

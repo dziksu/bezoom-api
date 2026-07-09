@@ -2,7 +2,7 @@ import { pgTable, uuid, text, timestamp, jsonb } from 'drizzle-orm/pg-core';
 
 export const businesses = pgTable('businesses', {
   id: uuid('id').defaultRandom().primaryKey(),
-  userId: uuid('user_id').notNull().unique(),
+  keycloakSub: text('keycloak_sub').notNull().unique(),
   name: text('name').notNull(),
   nip: text('nip').unique(),
   krs: text('krs'),

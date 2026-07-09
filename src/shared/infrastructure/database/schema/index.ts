@@ -1,4 +1,3 @@
-export { users } from './users';
 export { profiles } from './profiles';
 export { events } from './events';
 export { locations } from './locations';
