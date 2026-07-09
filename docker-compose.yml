@@ -152,11 +152,10 @@ services:
       KC_DB_PASSWORD: ${POSTGRES_PASSWORD:-bezoom_dev}
       KC_PROXY: edge
       KC_HOSTNAME_STRICT: "false"
-      KEYCLOAK_IMPORT: /opt/keycloak/data/import/realm.json
     ports:
       - "${KEYCLOAK_HTTP_PORT:-8080}:8080"
     volumes:
-      - keycloak_data:/opt/keycloak/data
+      - ./bezoom-realm.json:/opt/keycloak/data/import/bezoom-realm.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -201,21 +200,21 @@ services:
       redis:
         condition: service_healthy
 
-  nominatim:
-    image: mediagis/nominatim:5.3
-    restart: unless-stopped
-    environment:
-      PBF_URL: ${NOMINATIM_PBF_URL:-https://download.geofabrik.de/europe/poland-latest.osm.pbf}
-      REPLICATION_URL: https://download.geofabrik.de/europe/poland-updates/
-      NOMINATIM_PASSWORD: ${NOMINATIM_DB_PASSWORD:-nominatim_dev}
-      IMPORT_WIKIPEDIA: "false"
-      IMPORT_ADDRESS_ONLY: "true"
-      THREADS: "4"
-    ports:
-      - "${NOMINATIM_PORT:-8082}:8080"
-    volumes:
-      - nominatim_data:/var/lib/postgresql/16/main
-    shm_size: 2gb
+#  nominatim:
+#    image: mediagis/nominatim:5.3
+#    restart: unless-stopped
+#    environment:
+#      PBF_URL: ${NOMINATIM_PBF_URL:-https://download.geofabrik.de/europe/poland-latest.osm.pbf}
+#      REPLICATION_URL: https://download.geofabrik.de/europe/poland-updates/
+#      NOMINATIM_PASSWORD: ${NOMINATIM_DB_PASSWORD:-nominatim_dev}
+#      IMPORT_WIKIPEDIA: "false"
+#      IMPORT_ADDRESS_ONLY: "true"
+#      THREADS: "4"
+#    ports:
+#      - "${NOMINATIM_PORT:-8082}:8080"
+#    volumes:
+#      - nominatim_data:/var/lib/postgresql/16/main
+#    shm_size: 2gb
 
   # ───────────────────────────────────────────────────────────────────────────
   # DEV TOOLS  (profile: tools)
@@ -246,8 +245,8 @@ volumes:
     driver: local
   keycloak_data:
     driver: local
-  nominatim_data:
-    driver: local
+#  nominatim_data:
+#    driver: local
   redis_insight_data:
     driver: local
 

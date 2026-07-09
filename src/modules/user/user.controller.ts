@@ -1,23 +1,22 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Public } from 'nest-keycloak-connect';
+import { AuthenticatedUser } from 'nest-keycloak-connect';
 
-@ApiTags('Health')
-@Controller('health')
-export class HealthController {
-  @Public()
-  @Get()
+@ApiTags('User')
+@Controller('user')
+export class UserController {
   @ApiOperation({
-    summary: 'Health check',
-    description:
-      'Returns the current health status of the API. This endpoint is unauthenticated and suitable for load balancer probes.'
+    summary: 'Get user profile',
+    description: "Returns the authenticated user's profile information including username, email, and user ID."
   })
-  @ApiResponse({ status: 200, description: 'Service is healthy' })
-  check() {
+  @ApiResponse({ status: 200, description: 'User profile returned successfully' })
+  @Get('profile')
+  // @Resource('profile')
+  getProfile(@AuthenticatedUser() user: { sub: string; email: string; preferred_username: string }) {
     return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      service: 'bezoom-api'
+      message: `Welcome, ${user.preferred_username}!`,
+      userId: user.sub,
+      email: user.email
     };
   }
 }
