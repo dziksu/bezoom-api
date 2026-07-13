@@ -187,7 +187,7 @@
       "emailVerified": true,
       "firstName": "Bezoom",
       "lastName": "Admin",
-      "credentials": [{ "type": "password", "value": "admin123", "temporary": false }],
+      "credentials": [{ "type": "password", "value": "Test1234!", "temporary": false }],
       "realmRoles": ["user", "admin"],
       "clientRoles": {
         "nestjs-api": ["read:orders", "write:orders", "read:users", "manage:users"]
@@ -200,7 +200,7 @@
       "emailVerified": true,
       "firstName": "Test",
       "lastName": "User",
-      "credentials": [{ "type": "password", "value": "user123", "temporary": false }],
+      "credentials": [{ "type": "password", "value": "Test1234!", "temporary": false }],
       "realmRoles": ["user"],
       "clientRoles": {
         "nestjs-api": ["read:orders"]
