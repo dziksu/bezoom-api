@@ -10,6 +10,7 @@ import {
   UpdateBusinessProfileDto,
   RequestPhoneVerificationDto,
   VerifyPhoneDto,
+  VerifyBusinessDto,
   ProfileResponseDto
 } from '../dto/profile.dto';
 
@@ -73,9 +74,16 @@ export class ProfileService {
   /**
    * Get authenticated user's profile
    */
-  async getMyProfile(keycloakSub: string): Promise<ProfileResponseDto> {
-    const profile = await this.getProfileBySub(keycloakSub);
-    return this.toResponseDto(profile);
+  async getMyProfile(keycloakSub: string, email?: string): Promise<ProfileResponseDto> {
+    try {
+      const profile = await this.getProfileBySub(keycloakSub);
+      return this.toResponseDto(profile);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return this.createProfile(keycloakSub, email ?? '');
+      }
+      throw error;
+    }
   }
 
   /**
@@ -108,6 +116,28 @@ export class ProfileService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Verify or reject a business profile.
+   */
+  async verifyBusinessProfile(profileId: string, verifyDto: VerifyBusinessDto): Promise<ProfileResponseDto> {
+    const [updated] = await this.drizzleWrite.db
+      .update(profiles)
+      .set({
+        businessVerificationStatus: verifyDto.status,
+        businessVerificationDate: verifyDto.status === 'verified' ? new Date() : null,
+        updatedAt: new Date()
+      })
+      .where(eq(profiles.id, profileId))
+      .returning();
+
+    if (!updated) {
+      throw new NotFoundException('Profile not found');
+    }
+
+    this.logger.log(`Business profile ${verifyDto.status}: ${profileId}`);
+    return this.toResponseDto(updated);
   }
 
   /**

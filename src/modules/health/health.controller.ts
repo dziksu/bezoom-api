@@ -1,6 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { Public } from 'nest-keycloak-connect';
+import { Public } from '@api/shared/infrastructure/auth';
 
 @ApiTags('Health')
 @Controller('health')

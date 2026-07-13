@@ -63,6 +63,11 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   # Caps the log file at 10 Megabytes
+        max-file: "3"     # Keeps a maximum of 3 old log files
 
   # PgBouncer (connection pooling) — not needed for local dev.
   # In production, deploy via Coolify using the edoburu/pgbouncer image.
@@ -77,9 +82,9 @@ services:
     restart: unless-stopped
     command: >
       redis-server
-      --appendonly yes
+      --appendonly no
       --maxmemory 256mb
-      --maxmemory-policy noeviction
+      --maxmemory-policy allkeys-lru
       --requirepass ${REDIS_PASSWORD:-redis_dev}
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -113,6 +118,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"   # Caps the log file at 10 Megabytes
+        max-file: "3"     # Keeps a maximum of 3 old log files
 
   # Creates required buckets after MinIO is ready
   minio-init:
@@ -165,6 +175,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # ───────────────────────────────────────────────────────────────────────────
   # EMAIL (local SMTP + web UI)
@@ -188,17 +203,17 @@ services:
   # QUEUE BROWSER – Redis Commander (GUI for Redis data + BullMQ keys)
   # ───────────────────────────────────────────────────────────────────────────
 
-  redis-commander:
-    image: rediscommander/redis-commander:latest
-    platform: linux/amd64   # no native arm64 image; runs via Rosetta on Apple Silicon
-    restart: unless-stopped
-    ports:
-      - "${REDIS_COMMANDER_PORT:-3010}:8081"
-    environment:
-      REDIS_HOSTS: "local:redis:6379:0:${REDIS_PASSWORD:-redis_dev}"
-    depends_on:
-      redis:
-        condition: service_healthy
+#  redis-commander:
+#    image: rediscommander/redis-commander:latest
+#    platform: linux/amd64   # no native arm64 image; runs via Rosetta on Apple Silicon
+#    restart: unless-stopped
+#    ports:
+#      - "${REDIS_COMMANDER_PORT:-3010}:8081"
+#    environment:
+#      REDIS_HOSTS: "local:redis:6379:0:${REDIS_PASSWORD:-redis_dev}"
+#    depends_on:
+#      redis:
+#        condition: service_healthy
 
 #  nominatim:
 #    image: mediagis/nominatim:5.3
@@ -220,16 +235,16 @@ services:
   # DEV TOOLS  (profile: tools)
   # ───────────────────────────────────────────────────────────────────────────
 
-  redis-insight:
-    image: redis/redisinsight:latest
-    restart: unless-stopped
-    ports:
-      - "${REDIS_INSIGHT_PORT:-8001}:5540"
-    volumes:
-      - redis_insight_data:/data
-    depends_on:
-      redis:
-        condition: service_healthy
+#  redis-insight:
+#    image: redis/redisinsight:latest
+#    restart: unless-stopped
+#    ports:
+#      - "${REDIS_INSIGHT_PORT:-8001}:5540"
+#    volumes:
+#      - redis_insight_data:/data
+#    depends_on:
+#      redis:
+#        condition: service_healthy
 
 # ─────────────────────────────────────────────────────────────────────────────
 # VOLUMES
@@ -247,8 +262,8 @@ volumes:
     driver: local
 #  nominatim_data:
 #    driver: local
-  redis_insight_data:
-    driver: local
+#  redis_insight_data:
+#    driver: local
 
 # ─────────────────────────────────────────────────────────────────────────────
 # NETWORKS  (default bridge is fine for local dev)
