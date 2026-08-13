@@ -2,9 +2,10 @@ import { Injectable, Logger, BadRequestException, InternalServerErrorException }
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
+import { Client as MinioClient } from 'minio';
 import type { Express } from 'express';
+import type { MinioConfig } from '../config/minio.config';
 
 export interface FileUploadResult {
   fileName: string;
@@ -27,7 +28,7 @@ export class FileStorageService {
   private readonly logger = new Logger(FileStorageService.name);
   private readonly isProduction: boolean;
   private readonly localStoragePath: string;
-  private minioClient: any;
+  private minioClient?: MinioClient;
 
   constructor(private configService: ConfigService) {
     this.isProduction = this.configService.get<string>('NODE_ENV') === 'production';
@@ -45,10 +46,9 @@ export class FileStorageService {
    */
   private initializeMinIO(): void {
     try {
-      const { Client } = require('minio');
-      const minioConfig = this.configService.get('minio');
+      const minioConfig = this.minioConfig();
 
-      this.minioClient = new Client({
+      this.minioClient = new MinioClient({
         endPoint: minioConfig.endPoint,
         port: minioConfig.port,
         useSSL: minioConfig.useSSL,
@@ -86,7 +86,7 @@ export class FileStorageService {
    */
   async uploadFile(file: Express.Multer.File, bucket: string = 'avatars'): Promise<FileUploadResult> {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('FILE_REQUIRED');
     }
 
     // Validate file
@@ -118,7 +118,7 @@ export class FileStorageService {
    */
   getFileUrl(storagePath: string): string {
     if (this.isProduction) {
-      const minioConfig = this.configService.get('minio');
+      const minioConfig = this.minioConfig();
       return `http://${minioConfig.endPoint}:${minioConfig.port}/${storagePath}`;
     } else {
       // Local storage: return relative path for serving via static files
@@ -134,11 +134,14 @@ export class FileStorageService {
     const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
     if (file.size > maxSize) {
-      throw new BadRequestException('File size exceeds 5MB limit');
+      throw new BadRequestException({ code: 'FILE_SIZE_EXCEEDED', details: { maxBytes: maxSize } });
     }
 
     if (!allowedMimes.includes(file.mimetype)) {
-      throw new BadRequestException('Only JPEG, PNG, WebP, and GIF images are allowed');
+      throw new BadRequestException({
+        code: 'FILE_TYPE_NOT_ALLOWED',
+        details: { allowedMimeTypes: allowedMimes }
+      });
     }
   }
 
@@ -147,10 +150,13 @@ export class FileStorageService {
    */
   private async uploadToMinIO(file: Express.Multer.File, bucket: string): Promise<FileUploadResult> {
     try {
+      const client = this.minioClient;
+      if (!client) throw new Error('OBJECT_STORAGE_NOT_INITIALIZED');
+
       // Ensure bucket exists
-      const bucketExists = await this.minioClient.bucketExists(bucket);
+      const bucketExists = await client.bucketExists(bucket);
       if (!bucketExists) {
-        await this.minioClient.makeBucket(bucket, 'us-east-1');
+        await client.makeBucket(bucket, 'us-east-1');
       }
 
       // Generate unique filename
@@ -158,7 +164,7 @@ export class FileStorageService {
       const objectName = `${bucket}/${fileName}`;
 
       // Upload file
-      await this.minioClient.putObject(bucket, fileName, file.buffer, file.size, {
+      await client.putObject(bucket, fileName, file.buffer, file.size, {
         'Content-Type': file.mimetype
       });
 
@@ -172,14 +178,14 @@ export class FileStorageService {
       };
     } catch (error) {
       this.logger.error(`MinIO upload failed: ${(error as Error).message}`);
-      throw new InternalServerErrorException('File upload failed');
+      throw new InternalServerErrorException('FILE_UPLOAD_FAILED');
     }
   }
 
   /**
    * Upload to local storage
    */
-  private async uploadToLocal(file: Express.Multer.File, bucket: string): Promise<FileUploadResult> {
+  private uploadToLocal(file: Express.Multer.File, bucket: string): Promise<FileUploadResult> {
     try {
       const bucketPath = path.join(this.localStoragePath, bucket);
 
@@ -198,15 +204,15 @@ export class FileStorageService {
 
       this.logger.log(`File uploaded to local storage: ${filePath}`);
 
-      return {
+      return Promise.resolve({
         fileName,
         storagePath,
         url: this.getFileUrl(storagePath),
         size: file.size
-      };
+      });
     } catch (error) {
       this.logger.error(`Local storage upload failed: ${(error as Error).message}`);
-      throw new InternalServerErrorException('File upload failed');
+      throw new InternalServerErrorException('FILE_UPLOAD_FAILED');
     }
   }
 
@@ -215,10 +221,13 @@ export class FileStorageService {
    */
   private async deleteFromMinIO(storagePath: string): Promise<void> {
     try {
+      const client = this.minioClient;
+      if (!client) throw new Error('OBJECT_STORAGE_NOT_INITIALIZED');
+
       const [bucket, ...filePath] = storagePath.split('/');
       const objectName = filePath.join('/');
 
-      await this.minioClient.removeObject(bucket, objectName);
+      await client.removeObject(bucket, objectName);
       this.logger.log(`File deleted from MinIO: ${storagePath}`);
     } catch (error) {
       this.logger.warn(`Failed to delete file from MinIO: ${(error as Error).message}`);
@@ -229,7 +238,7 @@ export class FileStorageService {
   /**
    * Delete from local storage
    */
-  private async deleteFromLocal(storagePath: string): Promise<void> {
+  private deleteFromLocal(storagePath: string): Promise<void> {
     try {
       const filePath = path.join(this.localStoragePath, storagePath);
 
@@ -241,6 +250,13 @@ export class FileStorageService {
       this.logger.warn(`Failed to delete file from local storage: ${(error as Error).message}`);
       // Don't throw - this is non-critical cleanup
     }
+    return Promise.resolve();
+  }
+
+  private minioConfig(): MinioConfig {
+    const config = this.configService.get<MinioConfig>('minio');
+    if (!config) throw new Error('OBJECT_STORAGE_NOT_CONFIGURED');
+    return config;
   }
 
   /**

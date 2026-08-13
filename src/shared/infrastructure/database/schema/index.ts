@@ -1,9 +1,12 @@
 export { profiles } from './profiles';
 export { events } from './events';
 export { locations } from './locations';
+export { eventPhotos } from './event-photos';
 export { eventParticipants } from './event-participants';
 export { eventLikes } from './event-likes';
 export { eventSaves } from './event-saves';
+export { eventStats } from './event-stats';
+export { eventOutbox } from './event-outbox';
 export { friendships } from './friendships';
 export { businesses } from './businesses';
 export { notifications } from './notifications';

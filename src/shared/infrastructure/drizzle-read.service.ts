@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle, NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import * as schema from './database/schema';
 
@@ -37,5 +38,9 @@ export class DrizzleReadService implements OnModuleDestroy {
   async onModuleDestroy() {
     await this.pool.end();
     this.logger.log('Read database connection closed');
+  }
+
+  async ping(): Promise<void> {
+    await this.db.execute(sql`select 1`);
   }
 }

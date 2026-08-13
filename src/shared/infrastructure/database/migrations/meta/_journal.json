@@ -8,6 +8,41 @@
       "when": 1783596562894,
       "tag": "0000_cute_wither",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783596562895,
+      "tag": "0001_enhance_profiles",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784290297780,
+      "tag": "0002_enable_postgis",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784290432094,
+      "tag": "0003_events_verification_and_geo",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786622400000,
+      "tag": "0004_phone_verification_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786636800000,
+      "tag": "0005_event_lifecycle_and_stats",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,5 @@
 import {
   IsString,
-  IsEmail,
   IsOptional,
   MinLength,
   MaxLength,
@@ -166,7 +165,7 @@ export class ProfileResponseDto {
   keycloakSub: string;
 
   @ApiProperty()
-  accountType: 'personal' | 'business';
+  accountType: 'personal';
 
   @ApiProperty()
   firstName?: string;
@@ -190,19 +189,7 @@ export class ProfileResponseDto {
   interests?: string[];
 
   @ApiProperty()
-  businessName?: string;
-
-  @ApiProperty()
-  businessDescription?: string;
-
-  @ApiProperty()
-  websiteUrl?: string;
-
-  @ApiProperty()
   isPhoneVerified: boolean;
-
-  @ApiProperty()
-  businessVerificationStatus?: string;
 
   @ApiProperty()
   followersCount: number;

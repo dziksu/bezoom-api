@@ -10,6 +10,9 @@ import { StorageModule } from './shared/infrastructure/storage/storage.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from '@api/shared/infrastructure/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
+import { EventsModule } from './modules/events/events.module';
+import { ObservabilityModule } from './shared/infrastructure/observability/observability.module';
+import { CacheModule } from './shared/infrastructure/cache/cache.module';
 
 @Module({
   imports: [
@@ -18,11 +21,14 @@ import { UserModule } from './modules/user/user.module';
       load: [databaseConfig, redisConfig, minioConfig, authConfig, throttleConfig],
       envFilePath: ['.env.local', '.env']
     }),
+    ObservabilityModule,
+    CacheModule,
     AuthModule,
     DrizzleModule,
     StorageModule,
     HealthModule,
-    UserModule
+    UserModule,
+    EventsModule
   ],
   controllers: []
 })

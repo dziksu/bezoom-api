@@ -1,5 +1,5 @@
-import { pgTable, uuid, text, timestamp, decimal, integer, pgEnum } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { pgTable, uuid, text, timestamp, decimal, integer, pgEnum, index } from 'drizzle-orm/pg-core';
+import { relations, sql } from 'drizzle-orm';
 import { locations } from './locations';
 
 // ── Enums ────────────────────────────────────────────────────────────────
@@ -19,7 +19,14 @@ export const eventCategoryEnum = pgEnum('event_category', [
   'FOOD_AND_CULINARY'
 ]);
 
-export const eventStatusEnum = pgEnum('event_status', ['DRAFT', 'PUBLISHED', 'CANCELLED']);
+export const eventStatusEnum = pgEnum('event_status', [
+  'DRAFT',
+  'UPLOADED',
+  'READY',
+  'PUBLISHED',
+  'REJECTED',
+  'CANCELLED'
+]);
 
 export const mediaPipelineStatusEnum = pgEnum('media_pipeline_status', [
   'UPLOADED',
@@ -29,44 +36,62 @@ export const mediaPipelineStatusEnum = pgEnum('media_pipeline_status', [
   'READY'
 ]);
 
-export const visibilityEnum = pgEnum('visibility', ['PUBLIC', 'PRIVATE', 'FRIENDS_ONLY']);
+export const visibilityEnum = pgEnum('visibility', ['PUBLIC', 'PRIVATE']);
 
 export const priceTypeEnum = pgEnum('price_type', ['FREE', 'FIXED', 'RANGE', 'DONATION']);
 
+// Verification axis — independent of `status` (publication) and `mediaPipelineStatus`.
+export const verificationStatusEnum = pgEnum('verification_status', ['UNVERIFIED', 'VERIFIED', 'REJECTED']);
+
 // ── Table ────────────────────────────────────────────────────────────────
-export const events = pgTable('events', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  title: text('title').notNull(),
-  description: text('description').notNull(),
-  category: eventCategoryEnum('category').notNull(),
-  startDate: timestamp('start_date', { withTimezone: true }).notNull(),
-  endDate: timestamp('end_date', { withTimezone: true }),
-  organizerKeycloakSub: text('organizer_keycloak_sub').notNull(),
-  imageUrl: text('image_url'),
-  // Pricing
-  priceType: priceTypeEnum('price_type'),
-  priceMin: decimal('price_min', { precision: 10, scale: 2 }),
-  priceMax: decimal('price_max', { precision: 10, scale: 2 }),
-  currency: text('currency').default('PLN'),
-  ticketUrl: text('ticket_url'),
-  priceNotes: text('price_notes'),
-  // Amenities
-  amenities: text('amenities').array(),
-  // Status
-  status: eventStatusEnum('status').default('DRAFT').notNull(),
-  mediaPipelineStatus: mediaPipelineStatusEnum('media_pipeline_status'),
-  moderationScoreMax: decimal('moderation_score_max', {
-    precision: 5,
-    scale: 4
-  }),
-  moderatedAt: timestamp('moderated_at', { withTimezone: true }),
-  // Visibility
-  visibility: visibilityEnum('visibility').default('PUBLIC').notNull(),
-  radiusKm: integer('radius_km').default(5),
-  // Timestamps
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
-});
+export const events = pgTable(
+  'events',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    title: text('title').notNull(),
+    description: text('description').notNull(),
+    category: eventCategoryEnum('category').notNull(),
+    startDate: timestamp('start_date', { withTimezone: true }).notNull(),
+    endDate: timestamp('end_date', { withTimezone: true }),
+    organizerKeycloakSub: text('organizer_keycloak_sub').notNull(),
+    imageUrl: text('image_url'),
+    // Pricing
+    priceType: priceTypeEnum('price_type'),
+    priceMin: decimal('price_min', { precision: 10, scale: 2 }),
+    priceMax: decimal('price_max', { precision: 10, scale: 2 }),
+    currency: text('currency').default('PLN'),
+    ticketUrl: text('ticket_url'),
+    priceNotes: text('price_notes'),
+    // Amenities
+    amenities: text('amenities').array(),
+    // Status
+    status: eventStatusEnum('status').default('DRAFT').notNull(),
+    mediaPipelineStatus: mediaPipelineStatusEnum('media_pipeline_status'),
+    moderationScoreMax: decimal('moderation_score_max', {
+      precision: 5,
+      scale: 4
+    }),
+    moderatedAt: timestamp('moderated_at', { withTimezone: true }),
+    // Visibility
+    visibility: visibilityEnum('visibility').default('PUBLIC').notNull(),
+    radiusKm: integer('radius_km').default(5).notNull(),
+    // Verification (separate axis from publication `status` and `mediaPipelineStatus`)
+    verificationStatus: verificationStatusEnum('verification_status').default('UNVERIFIED').notNull(),
+    verificationRejectionReason: text('verification_rejection_reason'),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    // Timestamps
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
+  },
+  (table) => [
+    index('events_organizer_created_idx').on(table.organizerKeycloakSub, table.createdAt),
+    index('events_public_discovery_start_idx')
+      .on(table.startDate, table.id)
+      .where(
+        sql`${table.status} = 'PUBLISHED' AND ${table.visibility} = 'PUBLIC' AND ${table.verificationStatus} = 'VERIFIED' AND ${table.mediaPipelineStatus} = 'READY'`
+      )
+  ]
+);
 
 export const eventsRelations = relations(events, ({ one }) => ({
   location: one(locations, {

@@ -1,9 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
+import { JsonLoggerService } from './shared/infrastructure/observability/json-logger.service';
+import { ApiExceptionFilter, validationExceptionFactory } from './shared/infrastructure/http';
 
 const GLOBAL_PREFIX = 'api';
 
@@ -13,6 +15,8 @@ async function bootstrap() {
   });
 
   const configService = app.get(ConfigService);
+  const logger = app.get(JsonLoggerService);
+  app.useLogger(logger);
   const port = configService.get<number>('API_PORT', 4000);
 
   app.setGlobalPrefix(GLOBAL_PREFIX);
@@ -39,9 +43,11 @@ async function bootstrap() {
       transform: true,
       transformOptions: {
         enableImplicitConversion: true
-      }
+      },
+      exceptionFactory: validationExceptionFactory
     })
   );
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   // const keycloakUrl = configService.get<string>('KEYCLOAK_URL', '');
 
@@ -96,7 +102,7 @@ async function bootstrap() {
 
   await app.listen(port ?? 4000);
 
-  Logger.log(`📖 Application is running on: http://localhost:${port}/api`);
+  logger.log(`Application listening on http://localhost:${port}/api`, 'Bootstrap');
 }
 
-bootstrap();
+void bootstrap();

@@ -8,25 +8,15 @@ import {
   Body,
   UseInterceptors,
   UploadedFile,
-  BadRequestException,
-  HttpCode,
-  HttpStatus
+  BadRequestException
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiResponse, ApiTags, ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import type { Express } from 'express';
-import { AppPermission, CurrentUser, RequirePermissions } from '@api/shared/infrastructure/auth';
+import { CurrentUser } from '@api/shared/infrastructure/auth';
 import type { ICurrentUser } from '@api/shared/infrastructure/auth';
 import { ProfileService } from './services/profile.service';
-import {
-  UpdateProfileDto,
-  CreateBusinessProfileDto,
-  UpdateBusinessProfileDto,
-  RequestPhoneVerificationDto,
-  VerifyPhoneDto,
-  VerifyBusinessDto,
-  ProfileResponseDto
-} from './dto/profile.dto';
+import { UpdateProfileDto, RequestPhoneVerificationDto, VerifyPhoneDto, ProfileResponseDto } from './dto/profile.dto';
 
 @ApiTags('User Profile')
 @ApiBearerAuth()
@@ -117,7 +107,7 @@ export class UserController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(@CurrentUser() user: ICurrentUser, @UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No file provided');
+      throw new BadRequestException('AVATAR_FILE_REQUIRED');
     }
     return this.profileService.uploadAvatar(user.id, file);
   }
@@ -137,44 +127,6 @@ export class UserController {
   @Delete('profile/avatar')
   async deleteAvatar(@CurrentUser() user: ICurrentUser) {
     return this.profileService.deleteAvatar(user.id);
-  }
-
-  /**
-   * Create business profile
-   */
-  @ApiOperation({
-    summary: 'Create business profile',
-    description: 'Convert personal profile to business or create new business profile'
-  })
-  @ApiResponse({
-    status: 201,
-    description: 'Business profile created successfully',
-    type: ProfileResponseDto
-  })
-  @ApiResponse({ status: 400, description: 'Invalid input' })
-  @ApiResponse({ status: 409, description: 'Business already registered' })
-  @HttpCode(HttpStatus.CREATED)
-  @Post('profile/business')
-  async createBusinessProfile(@CurrentUser() user: ICurrentUser, @Body() createDto: CreateBusinessProfileDto) {
-    return this.profileService.createBusinessProfile(user.id, createDto);
-  }
-
-  /**
-   * Update business profile
-   */
-  @ApiOperation({
-    summary: 'Update business profile',
-    description: 'Update business profile information (name, NIP, description, etc.)'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Business profile updated successfully',
-    type: ProfileResponseDto
-  })
-  @ApiResponse({ status: 400, description: 'Invalid input or not a business account' })
-  @Patch('profile/business')
-  async updateBusinessProfile(@CurrentUser() user: ICurrentUser, @Body() updateDto: UpdateBusinessProfileDto) {
-    return this.profileService.updateBusinessProfile(user.id, updateDto);
   }
 
   /**
@@ -223,21 +175,9 @@ export class UserController {
   @Get('info')
   getProfileInfo(@CurrentUser() user: ICurrentUser) {
     return {
-      message: `Welcome, ${user.username ?? user.email ?? user.id}!`,
       userId: user.id,
-      email: user.email
+      email: user.email,
+      username: user.username
     };
-  }
-
-  /**
-   * Verify or reject a business profile.
-   */
-  @ApiOperation({ summary: 'Verify business profile' })
-  @ApiResponse({ status: 200, description: 'Business profile verification updated', type: ProfileResponseDto })
-  @ApiResponse({ status: 404, description: 'Profile not found' })
-  @RequirePermissions(AppPermission.MANAGE_USERS)
-  @Patch('profile/:id/verify-business')
-  async verifyBusinessProfile(@Param('id') profileId: string, @Body() verifyDto: VerifyBusinessDto) {
-    return this.profileService.verifyBusinessProfile(profileId, verifyDto);
   }
 }

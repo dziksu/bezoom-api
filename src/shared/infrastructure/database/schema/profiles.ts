@@ -37,6 +37,9 @@ export const profiles = pgTable('profiles', {
   // Verification
   isPhoneVerified: boolean('is_phone_verified').notNull().default(false),
   phoneVerificationToken: text('phone_verification_token'),
+  phoneVerificationExpiresAt: timestamp('phone_verification_expires_at', { withTimezone: true }),
+  phoneVerificationSentAt: timestamp('phone_verification_sent_at', { withTimezone: true }),
+  phoneVerificationAttempts: integer('phone_verification_attempts').notNull().default(0),
   businessVerificationStatus: varchar('business_verification_status', {
     length: 20
   }).default('unverified'), // 'unverified', 'pending', 'verified', 'rejected'

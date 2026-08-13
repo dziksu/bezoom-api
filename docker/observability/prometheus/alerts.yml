@@ -1,0 +1,45 @@
+groups:
+  - name: bezoom-api
+    rules:
+      - alert: BezoomApiUnavailable
+        expr: up{job="bezoom-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: BeZoom API is unavailable
+          description: Prometheus has been unable to scrape BeZoom API for at least one minute.
+
+      - alert: BezoomApiHighErrorRate
+        expr: |
+          sum(rate(bezoom_http_requests_total{status_code=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(bezoom_http_requests_total[5m])), 0.001) > 0.02
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BeZoom API 5xx rate exceeds 2%
+          description: More than 2% of API responses have been server errors for five minutes.
+
+      - alert: BezoomApiSlowP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(bezoom_http_request_duration_seconds_bucket[5m]))
+          ) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: BeZoom API p95 latency exceeds 500 ms
+          description: Overall p95 HTTP latency has exceeded the MVP latency budget for ten minutes.
+
+      - alert: BezoomApiEventLoopLag
+        expr: bezoom_nodejs_eventloop_lag_p99_seconds > 0.25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BeZoom API event loop is blocked
+          description: Node.js p99 event-loop lag has exceeded 250 ms for five minutes.

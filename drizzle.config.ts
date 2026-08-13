@@ -4,6 +4,7 @@ export default {
   schema: './src/shared/infrastructure/database/schema/*',
   out: './src/shared/infrastructure/database/migrations',
   dialect: 'postgresql',
+  extensionsFilters: ['postgis'],
   dbCredentials: {
     url: process.env.DATABASE_URL || 'postgresql://bezoom:bezoom_dev@localhost:5432/bezoom'
   }

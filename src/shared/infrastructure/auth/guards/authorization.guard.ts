@@ -27,7 +27,7 @@ export class AuthorizationGuard implements CanActivate {
 
     const user = context.switchToHttp().getRequest<AuthorizedRequest>().currentUser;
     if (!user) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('AUTHENTICATION_REQUIRED');
     }
 
     const hasRoles = !requiredRoles?.length || requiredRoles.every((role) => user.roles.includes(role));
@@ -35,7 +35,7 @@ export class AuthorizationGuard implements CanActivate {
       !requiredPermissions?.length || requiredPermissions.every((permission) => user.permissions.includes(permission));
 
     if (!hasRoles || !hasPermissions) {
-      throw new ForbiddenException('Insufficient authorization');
+      throw new ForbiddenException('INSUFFICIENT_PERMISSIONS');
     }
 
     return true;
