@@ -162,9 +162,6 @@ export class ProfileResponseDto {
   id: string;
 
   @ApiProperty()
-  keycloakSub: string;
-
-  @ApiProperty()
   accountType: 'personal';
 
   @ApiProperty()
@@ -205,4 +202,40 @@ export class ProfileResponseDto {
 
   @ApiProperty()
   updatedAt: Date;
+}
+
+/** Public projection: never exposes IdP identifiers, email or phone-verification state. */
+export class PublicProfileResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty({ required: false })
+  firstName?: string;
+
+  @ApiProperty({ required: false })
+  lastName?: string;
+
+  @ApiProperty({ required: false })
+  username?: string;
+
+  @ApiProperty({ required: false })
+  bio?: string;
+
+  @ApiProperty({ required: false })
+  avatarUrl?: string;
+
+  @ApiProperty({ required: false, type: [String] })
+  interests?: string[];
+
+  @ApiProperty()
+  followersCount: number;
+
+  @ApiProperty()
+  followingCount: number;
+
+  @ApiProperty()
+  isPrivate: boolean;
+
+  @ApiProperty()
+  createdAt: Date;
 }

@@ -33,6 +33,19 @@ describe('Bezoom API (e2e)', () => {
     expect(response.body).toMatchObject({ status: 'ok', service: 'bezoom-api' });
   });
 
+  it('GET /api/health/ready verifies required infrastructure', async () => {
+    const response = await request(app.getHttpServer()).get('/api/health/ready').expect(200);
+    expect(response.body).toMatchObject({
+      status: 'ready',
+      service: 'bezoom-api',
+      checks: {
+        database: 'up',
+        redis: 'up',
+        object_storage: 'up'
+      }
+    });
+  });
+
   it('propagates a safe request ID in a keyed error', async () => {
     const response = await request(app.getHttpServer())
       .get('/api/route-that-does-not-exist')

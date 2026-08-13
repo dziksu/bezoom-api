@@ -50,6 +50,7 @@ lerna-debug.log*
 # File uploads (local development)
 /uploads/
 *.uploaded
+/backups/
 
 # Runtime data
 pids

@@ -2,3 +2,4 @@
 /dist
 /coverage
 .rtk
+/src/shared/infrastructure/database/migrations/meta

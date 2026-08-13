@@ -9,6 +9,9 @@ export interface MinioConfig {
   rawBucket: string;
   mediaBucket: string;
   publicUrl?: string;
+  presignEndPoint: string;
+  presignPort: number;
+  presignUseSSL: boolean;
 }
 
 export default registerAs('minio', (): MinioConfig => ({
@@ -21,5 +24,9 @@ export default registerAs('minio', (): MinioConfig => ({
   mediaBucket: process.env.MINIO_MEDIA_BUCKET || 'media',
   // Public-facing host for serving media (e.g. a CDN or reverse-proxy in front of MinIO).
   // Falls back to the direct MinIO endpoint if unset.
-  publicUrl: process.env.MINIO_PUBLIC_URL || undefined
+  publicUrl: process.env.MINIO_PUBLIC_URL || undefined,
+  // The API may connect through the Docker DNS name while clients need a public host.
+  presignEndPoint: process.env.MINIO_PRESIGN_ENDPOINT || process.env.MINIO_ENDPOINT || 'localhost',
+  presignPort: parseInt(process.env.MINIO_PRESIGN_PORT || process.env.MINIO_PORT || '9000', 10),
+  presignUseSSL: (process.env.MINIO_PRESIGN_USE_SSL || process.env.MINIO_USE_SSL) === 'true'
 }));

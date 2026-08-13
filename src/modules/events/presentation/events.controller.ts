@@ -15,6 +15,7 @@ import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Public } from '@api/shared/infrastructure/auth';
 import type { ICurrentUser } from '@api/shared/infrastructure/auth';
+import { RedisRateLimit } from '@api/shared/infrastructure/rate-limit';
 import { CreateEventDto } from '../application/dto/create-event.dto';
 import { RequestPhotoUploadsDto, PhotoUploadTargetDto } from '../application/dto/request-photo-uploads.dto';
 import { SearchEventsQueryDto } from '../application/dto/search-events.query.dto';
@@ -25,13 +26,15 @@ import {
   EventDetailDto,
   EventSearchResponseDto,
   PaginatedEventsDto,
-  PaginatedAttendingEventsDto
+  PaginatedAttendingEventsDto,
+  EventLifecycleResponseDto
 } from '../application/dto/event-response.dto';
 import { CreateEventCommand } from '../application/commands/create-event/create-event.command';
 import { RequestPhotoUploadsCommand } from '../application/commands/request-photo-uploads/request-photo-uploads.command';
 import { SetEventLikeCommand } from '../application/commands/set-event-like/set-event-like.command';
 import { SetEventSaveCommand } from '../application/commands/set-event-save/set-event-save.command';
 import { SetRsvpCommand } from '../application/commands/set-rsvp/set-rsvp.command';
+import { PublishEventCommand } from '../application/commands/publish-event/publish-event.command';
 import { SearchEventsByLocationQuery } from '../application/queries/search-events-by-location/search-events-by-location.query';
 import { GetEventByIdQuery } from '../application/queries/get-event-by-id/get-event-by-id.query';
 import { ListMyCreatedEventsQuery } from '../application/queries/list-my-created-events/list-my-created-events.query';
@@ -59,6 +62,10 @@ export class EventsController {
   @ApiResponse({ status: 400, description: 'Invalid input or photos not uploaded' })
   @HttpCode(HttpStatus.CREATED)
   @Post()
+  @RedisRateLimit(
+    { name: 'event_create_user', limit: 10, windowSeconds: 60, scopes: ['user'] },
+    { name: 'event_create_ip', limit: 100, windowSeconds: 60, scopes: ['ip'] }
+  )
   async createEvent(@CurrentUser() user: ICurrentUser, @Body() dto: CreateEventDto): Promise<EventResponseDto> {
     return this.commandBus.execute(
       new CreateEventCommand(
@@ -90,11 +97,32 @@ export class EventsController {
   @ApiResponse({ status: 201, description: 'Upload URLs generated', type: [PhotoUploadTargetDto] })
   @HttpCode(HttpStatus.CREATED)
   @Post('photos/upload-urls')
+  @RedisRateLimit(
+    { name: 'event_photo_upload_url_user', limit: 10, windowSeconds: 60, scopes: ['user'] },
+    { name: 'event_photo_upload_url_ip', limit: 100, windowSeconds: 60, scopes: ['ip'] }
+  )
   async requestPhotoUploads(
     @CurrentUser() user: ICurrentUser,
     @Body() dto: RequestPhotoUploadsDto
   ): Promise<PhotoUploadTargetDto[]> {
     return this.commandBus.execute(new RequestPhotoUploadsCommand(user.id, dto.files));
+  }
+
+  @ApiOperation({
+    summary: 'Publish my event',
+    description: 'Publishes an event only after moderation/media processing is READY and the phone is verified.'
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Event published', type: EventLifecycleResponseDto })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  @ApiResponse({ status: 409, description: 'Event or organizer is not ready for publication' })
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/publish')
+  async publishEvent(
+    @CurrentUser() user: ICurrentUser,
+    @Param('id', ParseUUIDPipe) id: string
+  ): Promise<EventLifecycleResponseDto> {
+    return this.commandBus.execute(new PublishEventCommand(id, user.id));
   }
 
   // ── Discovery / read (declared before /:id so static paths win) ──────────

@@ -57,15 +57,23 @@ Błędy walidacji używają `VALIDATION_FAILED` i opcjonalnej mapy `fields`. Odp
 ## Weryfikacja
 
 ```bash
-pnpm exec tsc --noEmit
-pnpm test -- --runInBand
-pnpm test:e2e -- --runInBand
+pnpm typecheck
+pnpm lint:check
+pnpm test:ci
+pnpm test:e2e:ci
 pnpm build
 pnpm prettier:check
+pnpm db:check
 ```
 
 Migracje można uruchomić osobno przez `pnpm db:migrate`.
 
+CI uruchamia powyższe kontrole na każdym pull requeście. Osobny job integracyjny stosuje wszystkie migracje na pustym PostgreSQL/PostGIS, sprawdza Redis i MinIO, uruchamia E2E oraz wykonuje próbny backup i restore bazy. Coverage jest publikowane jako artefakt CI; na obecnym etapie nie blokujemy zmian globalnym progiem, ale nowy kod powinien być testowany w ramach rozwijanego slice'a.
+
+Procedura dziennego backupu, odtwarzania oraz testu RPO/RTO znajduje się w [runbooku PostgreSQL](docs/operations/postgres-backup-restore.md).
+
 ## Zasady publikacji eventu
 
 Nowy event nie staje się publiczny automatycznie. Przechodzi przez upload, moderację/weryfikację i przygotowanie mediów. Feed, wyszukiwanie, szczegóły oraz engagement dopuszczają tylko eventy publiczne, opublikowane, zweryfikowane i z mediami `READY`. Promień MVP wynosi stałe 5 km i nie może zostać kupiony ani ustawiony przez klienta.
+
+Lokalnie `event.created` jest przekazywany transakcyjnym outboxem do BullMQ, a developerski worker kopiuje media z prywatnego bucketu `raw-uploads` do `media` i ustawia `READY`. Użytkownik publikuje gotowy event przez `POST /api/events/:id/publish`; wymagany jest zweryfikowany telefon. `development_passthrough` jest twardo blokowany przy `NODE_ENV=production` — produkcja wymaga prawdziwej moderacji oraz bezpiecznego dekodowania i ponownego kodowania obrazu.

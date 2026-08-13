@@ -1,10 +1,65 @@
 import { events, locations, eventPhotos } from '@api/shared/infrastructure/database/schema';
-import { Event } from '../../domain/event.aggregate';
+import { Event, type EventProps } from '../../domain/event.aggregate';
+import { EventPhoto } from '../../domain/event-photo.entity';
+import { EventPeriod } from '../../domain/value-objects/event-period.vo';
+import { EventLocation } from '../../domain/value-objects/event-location.vo';
+import { Price } from '../../domain/value-objects/price.vo';
 
 type NewEventRow = typeof events.$inferInsert;
 type NewLocationRow = typeof locations.$inferInsert;
+type EventRow = typeof events.$inferSelect;
+type LocationRow = typeof locations.$inferSelect;
+type PhotoRow = typeof eventPhotos.$inferSelect;
 
 export class EventMapper {
+  static toDomain(event: EventRow, location: LocationRow, photos: PhotoRow[]): Event {
+    const props: EventProps = {
+      title: event.title,
+      description: event.description,
+      category: event.category,
+      period: EventPeriod.reconstitute(event.startDate, event.endDate ?? undefined),
+      organizerKeycloakSub: event.organizerKeycloakSub,
+      location: EventLocation.create({
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+        address: location.address ?? undefined,
+        city: location.city ?? undefined,
+        country: location.country ?? 'PL'
+      }),
+      price: Price.create({
+        priceType: event.priceType ?? 'FREE',
+        priceMin: event.priceMin === null ? undefined : Number(event.priceMin),
+        priceMax: event.priceMax === null ? undefined : Number(event.priceMax),
+        currency: event.currency ?? 'PLN',
+        ticketUrl: event.ticketUrl ?? undefined,
+        priceNotes: event.priceNotes ?? undefined
+      }),
+      amenities: event.amenities ?? [],
+      photos: photos.map((photo) =>
+        EventPhoto.reconstitute({
+          id: photo.id,
+          rawKey: photo.rawKey,
+          mediaKey: photo.mediaKey ?? undefined,
+          position: photo.position ?? 0,
+          mimeType: photo.mimeType,
+          sizeBytes: photo.sizeBytes ?? undefined,
+          status: photo.status
+        })
+      ),
+      status: event.status,
+      mediaPipelineStatus: event.mediaPipelineStatus ?? 'UPLOADED',
+      visibility: event.visibility,
+      radiusKm: event.radiusKm,
+      verificationStatus: event.verificationStatus,
+      verificationRejectionReason: event.verificationRejectionReason ?? undefined,
+      verifiedAt: event.verifiedAt ?? undefined,
+      createdAt: event.createdAt,
+      updatedAt: event.updatedAt
+    };
+
+    return Event.reconstitute(props, event.id);
+  }
+
   static toEventRow(event: Event): NewEventRow {
     return {
       id: event.id,

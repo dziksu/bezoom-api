@@ -12,7 +12,7 @@ import { QueueName } from './queue-names';
         connection: {
           host: configService.get<string>('redis.host', 'localhost'),
           port: configService.get<number>('redis.port', 6379),
-          password: configService.get<string>('redis.password', 'redis_dev')
+          password: configService.get<string>('redis.password')
         }
       }),
       inject: [ConfigService]

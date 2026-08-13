@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { events, locations, eventPhotos, eventStats, eventOutbox } from '@api/shared/infrastructure/database/schema';
 import { Event } from '../../domain/event.aggregate';
@@ -30,6 +30,49 @@ export class DrizzleEventRepository extends EventRepository {
         eventType: 'event.created',
         payload: { eventId: event.id, organizerKeycloakSub: event.organizerKeycloakSub }
       });
+    });
+  }
+
+  async findById(id: string): Promise<Event | null> {
+    const [row] = await this.writeService.db
+      .select({ event: events, location: locations })
+      .from(events)
+      .innerJoin(locations, eq(locations.eventId, events.id))
+      .where(eq(events.id, id))
+      .limit(1);
+
+    if (!row) return null;
+
+    const photos = await this.writeService.db
+      .select()
+      .from(eventPhotos)
+      .where(eq(eventPhotos.eventId, id))
+      .orderBy(asc(eventPhotos.position));
+
+    return EventMapper.toDomain(row.event, row.location, photos);
+  }
+
+  async updateLifecycle(event: Event): Promise<void> {
+    await this.writeService.db.transaction(async (tx) => {
+      await tx
+        .update(events)
+        .set({
+          status: event.status,
+          mediaPipelineStatus: event.mediaPipelineStatus,
+          verificationStatus: event.verificationStatus,
+          verificationRejectionReason: event.verificationRejectionReason ?? null,
+          verifiedAt: event.verifiedAt ?? null,
+          updatedAt: event.updatedAt
+        })
+        .where(eq(events.id, event.id));
+
+      for (const photo of EventMapper.toPhotoUpdateRows(event)) {
+        const { id: photoId, ...update } = photo;
+        await tx
+          .update(eventPhotos)
+          .set(update)
+          .where(and(eq(eventPhotos.id, photoId), eq(eventPhotos.eventId, event.id)));
+      }
     });
   }
 

@@ -82,7 +82,7 @@ export class CreateEventHandler implements ICommandHandler<CreateEventCommand, E
     await this.eventRepository.save(event);
     event.clearEvents();
 
-    this.logger.log(`Event ${event.id} created by ${event.organizerKeycloakSub}`);
+    this.logger.log('EVENT_CREATED');
 
     return {
       id: event.id,
@@ -91,7 +91,6 @@ export class CreateEventHandler implements ICommandHandler<CreateEventCommand, E
       category: event.category,
       startDate: event.period.startDate,
       endDate: event.period.endDate,
-      organizerKeycloakSub: event.organizerKeycloakSub,
       latitude: event.location.coordinates.latitude,
       longitude: event.location.coordinates.longitude,
       address: event.location.address,

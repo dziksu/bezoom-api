@@ -1,0 +1,210 @@
+name: API CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: '10.29.2'
+
+jobs:
+  quality:
+    name: Static checks and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check formatting
+        run: |
+          pnpm prettier:check
+          pnpm exec prettier --check README.md .github/workflows/*.yml docs/operations/*.md
+
+      - name: Check lint without modifying sources
+        run: pnpm lint:check
+
+      - name: Check TypeScript
+        run: pnpm typecheck
+
+      - name: Check migration metadata
+        run: pnpm db:check
+
+      - name: Build production bundle
+        run: pnpm build
+
+      - name: Run unit tests with coverage
+        run: pnpm test:cov:ci
+
+      - name: Validate operational shell scripts
+        run: |
+          bash -n scripts/postgres/backup.sh scripts/postgres/restore.sh
+          shellcheck scripts/postgres/backup.sh scripts/postgres/restore.sh
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-coverage
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 14
+
+  integration:
+    name: Migrations, infrastructure, E2E and restore
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgis/postgis:16-3.5-alpine
+        env:
+          POSTGRES_USER: bezoom
+          POSTGRES_PASSWORD: bezoom_ci
+          POSTGRES_DB: bezoom
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bezoom -d bezoom"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://bezoom:bezoom_ci@localhost:5432/bezoom
+      DATABASE_READ_URL: postgresql://bezoom:bezoom_ci@localhost:5432/bezoom
+      REDIS_URL: redis://localhost:6379
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      MINIO_ENDPOINT: localhost
+      MINIO_PORT: 9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin_ci
+      MINIO_USE_SSL: 'false'
+      MINIO_RAW_BUCKET: raw-uploads
+      MINIO_MEDIA_BUCKET: media
+      KEYCLOAK_JWKS_URL: http://localhost:8080/realms/bezoom/protocol/openid-connect/certs
+      KEYCLOAK_ISSUER: http://localhost:8080/realms/bezoom
+      KEYCLOAK_CLIENT_ID: bezoom-api
+      KEYCLOAK_AUDIENCE: bezoom-api
+      PHONE_VERIFICATION_HASH_SECRET: ci-only-phone-verification-secret
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start MinIO and create private buckets
+        run: |
+          docker run --detach --rm --name bezoom-minio-ci \
+            --publish 9000:9000 \
+            --env MINIO_ROOT_USER=minioadmin \
+            --env MINIO_ROOT_PASSWORD=minioadmin_ci \
+            minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
+            server /data
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:9000/minio/health/live >/dev/null; then
+              break
+            fi
+            if [[ "$attempt" == 30 ]]; then
+              docker logs bezoom-minio-ci
+              exit 1
+            fi
+            sleep 1
+          done
+          docker run --rm --network host \
+            --env MC_HOST_local=http://minioadmin:minioadmin_ci@localhost:9000 \
+            minio/mc@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727 \
+            mb --ignore-existing local/raw-uploads local/media
+
+      - name: Apply migrations to a fresh PostGIS database
+        run: pnpm db:migrate
+
+      - name: Verify migration and PostGIS state
+        run: |
+          expected_migrations="$(node -p "require('./src/shared/infrastructure/database/migrations/meta/_journal.json').entries.length")"
+          migration_count="$(docker exec "${{ job.services.postgres.id }}" \
+            psql -U bezoom -d bezoom -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
+          test "$migration_count" = "$expected_migrations"
+          postgis_version="$(docker exec "${{ job.services.postgres.id }}" \
+            psql -U bezoom -d bezoom -v ON_ERROR_STOP=1 -Atqc 'select postgis_version()')"
+          test -n "$postgis_version"
+          outbox_table_count="$(docker exec "${{ job.services.postgres.id }}" \
+            psql -U bezoom -d bezoom -v ON_ERROR_STOP=1 -Atqc \
+            "select count(*) from information_schema.tables where table_schema = 'public' and table_name = 'event_outbox'")"
+          test "$outbox_table_count" = "1"
+
+      - name: Run infrastructure E2E tests
+        run: pnpm test:e2e:ci
+
+      - name: Smoke-test PostgreSQL backup and restore
+        run: |
+          postgres_container="${{ job.services.postgres.id }}"
+          docker exec "$postgres_container" createdb -U bezoom bezoom_restore_ci
+          docker cp scripts/postgres/. "$postgres_container":/tmp/bezoom-postgres-scripts/
+          docker exec \
+            --env DATABASE_URL=postgresql://bezoom:bezoom_ci@localhost:5432/bezoom \
+            --env BACKUP_DIR=/tmp/bezoom-backups \
+            --env BACKUP_LABEL=bezoom-ci \
+            "$postgres_container" \
+            bash /tmp/bezoom-postgres-scripts/backup.sh
+          backup_file="$(docker exec "$postgres_container" \
+            sh -c 'find /tmp/bezoom-backups -maxdepth 1 -name "bezoom-ci-*.dump" -print -quit')"
+          test -n "$backup_file"
+          docker exec \
+            --env DATABASE_URL=postgresql://bezoom:bezoom_ci@localhost:5432/bezoom_restore_ci \
+            --env BACKUP_FILE="$backup_file" \
+            --env RESTORE_CONFIRM=RESTORE_TO_EMPTY_DATABASE \
+            "$postgres_container" \
+            bash /tmp/bezoom-postgres-scripts/restore.sh
+          restored_migrations="$(docker exec "$postgres_container" \
+            psql -U bezoom -d bezoom_restore_ci -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
+          expected_migrations="$(node -p "require('./src/shared/infrastructure/database/migrations/meta/_journal.json').entries.length")"
+          test "$restored_migrations" = "$expected_migrations"

@@ -19,6 +19,7 @@ export interface ObjectStat {
 export class ObjectStorageService {
   private readonly logger = new Logger(ObjectStorageService.name);
   private readonly client: MinioClient;
+  private readonly presignClient: MinioClient;
 
   readonly rawBucket: string;
   readonly mediaBucket: string;
@@ -45,11 +46,20 @@ export class ObjectStorageService {
       accessKey: minioConfig.accessKey,
       secretKey: minioConfig.secretKey
     });
+    this.presignClient = new MinioClient({
+      endPoint: minioConfig.presignEndPoint,
+      port: minioConfig.presignPort,
+      useSSL: minioConfig.presignUseSSL,
+      accessKey: minioConfig.accessKey,
+      secretKey: minioConfig.secretKey,
+      // Avoid a bucket-location network lookup through a client-facing hostname.
+      region: 'us-east-1'
+    });
   }
 
   /** Presigned PUT URL a client can upload directly to, bypassing the API for the payload. */
   async getPresignedPutUrl(bucket: string, key: string, ttlSeconds = 900): Promise<string> {
-    return this.client.presignedPutObject(bucket, key, ttlSeconds);
+    return this.presignClient.presignedPutObject(bucket, key, ttlSeconds);
   }
 
   /** Returns stat for an object, or `null` if it doesn't exist. */

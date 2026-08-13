@@ -6,6 +6,9 @@ import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-
 import { SearchEventsByLocationQuery } from './search-events-by-location.query';
 import type { EventSearchResponseDto } from '../../dto/event-response.dto';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
+import { MVP_EVENT_REACH_RADIUS_KM } from '../../../domain/event.aggregate';
+
+export const MVP_DISCOVERY_RADIUS_METERS = MVP_EVENT_REACH_RADIUS_KM * 1000;
 
 interface SearchRow {
   [key: string]: unknown;
@@ -15,7 +18,7 @@ interface SearchRow {
   category: string;
   start_date: Date;
   end_date: Date | null;
-  organizer_keycloak_sub: string;
+  organizer_id: string | null;
   price_type: string | null;
   price_min: string | null;
   price_max: string | null;
@@ -33,7 +36,6 @@ interface SearchRow {
   city: string | null;
   country: string | null;
   distance_m: number;
-  total_count: string;
 }
 
 @QueryHandler(SearchEventsByLocationQuery)
@@ -54,6 +56,9 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
 
   private async search(query: SearchEventsByLocationQuery): Promise<EventSearchResponseDto> {
     const offset = (query.page - 1) * query.limit;
+    // One extra row provides hasMore without forcing PostgreSQL to count every
+    // matching event before it can return the first page.
+    const fetchLimit = query.limit + 1;
     const weekIsNull = query.week === undefined;
     const week = query.week ?? 0;
 
@@ -65,20 +70,21 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
       )
       SELECT
         e.id, e.title, e.description, e.category, e.start_date, e.end_date,
-        e.organizer_keycloak_sub, e.price_type, e.price_min, e.price_max, e.currency,
+        organizer.id AS organizer_id, e.price_type, e.price_min, e.price_max, e.currency,
         e.ticket_url, e.price_notes, e.amenities, e.status, e.visibility,
         e.verification_status, e.created_at,
         l.latitude, l.longitude, l.address, l.city, l.country,
-        ST_Distance(l.geog, p.origin) AS distance_m,
-        count(*) OVER () AS total_count
-      FROM events e
-      JOIN locations l ON l.event_id = e.id
-      CROSS JOIN params p
+        ST_Distance(l.geog, p.origin) AS distance_m
+      FROM params p
+      JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MVP_DISCOVERY_RADIUS_METERS})
+      JOIN events e ON e.id = l.event_id
+      LEFT JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
       WHERE e.status = 'PUBLISHED'
         AND e.verification_status = 'VERIFIED'
         AND e.visibility = 'PUBLIC'
         AND e.media_pipeline_status = 'READY'
-        AND ST_DWithin(l.geog, p.origin, e.radius_km * 1000)
+        AND e.radius_km = ${MVP_EVENT_REACH_RADIUS_KM}
+        AND e.start_date > now()
         AND (
           ${weekIsNull} OR (
             (e.start_date AT TIME ZONE 'Europe/Warsaw') >= p.week_start
@@ -86,11 +92,12 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           )
         )
       ORDER BY distance_m ASC, e.id ASC
-      LIMIT ${query.limit} OFFSET ${offset}
+      LIMIT ${fetchLimit} OFFSET ${offset}
     `);
 
-    const rows = (result as { rows: SearchRow[] }).rows;
-    const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+    const fetchedRows = (result as { rows: SearchRow[] }).rows;
+    const hasMore = fetchedRows.length > query.limit;
+    const rows = fetchedRows.slice(0, query.limit);
 
     const eventIds = rows.map((r) => r.id);
     const coverPhotos = await this.fetchCoverPhotos(eventIds);
@@ -103,7 +110,7 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
         category: row.category,
         startDate: row.start_date,
         endDate: row.end_date ?? undefined,
-        organizerKeycloakSub: row.organizer_keycloak_sub,
+        organizerId: row.organizer_id ?? undefined,
         latitude: Number(row.latitude),
         longitude: Number(row.longitude),
         address: row.address ?? undefined,
@@ -128,7 +135,7 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
       })),
       page: query.page,
       limit: query.limit,
-      total
+      hasMore
     };
   }
 

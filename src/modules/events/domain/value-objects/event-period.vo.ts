@@ -23,4 +23,9 @@ export class EventPeriod {
     }
     return new EventPeriod(startDate, endDate);
   }
+
+  /** Persistence-only constructor; historical events may legitimately be in the past. */
+  static reconstitute(startDate: Date, endDate?: Date): EventPeriod {
+    return new EventPeriod(startDate, endDate);
+  }
 }

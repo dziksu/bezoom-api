@@ -24,6 +24,11 @@ export class EventPhoto {
     return new EventPhoto({ ...input, status: 'UPLOADED' });
   }
 
+  /** Reconstitutes a persisted child without replaying creation invariants. */
+  static reconstitute(props: EventPhotoProps): EventPhoto {
+    return new EventPhoto(props);
+  }
+
   markReady(mediaKey: string): void {
     this.props.mediaKey = mediaKey;
     this.props.status = 'READY';

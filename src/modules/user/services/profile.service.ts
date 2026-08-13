@@ -21,7 +21,8 @@ import {
   RequestPhoneVerificationDto,
   VerifyPhoneDto,
   VerifyBusinessDto,
-  ProfileResponseDto
+  ProfileResponseDto,
+  PublicProfileResponseDto
 } from '../dto/profile.dto';
 import {
   generatePhoneVerificationCode,
@@ -75,7 +76,7 @@ export class ProfileService {
   /**
    * Get profile by ID (public lookup)
    */
-  async getProfileById(profileId: string): Promise<ProfileResponseDto> {
+  async getProfileById(profileId: string): Promise<PublicProfileResponseDto> {
     const result = await this.drizzleRead.db.select().from(profiles).where(eq(profiles.id, profileId)).limit(1);
 
     if (result.length === 0) {
@@ -84,12 +85,7 @@ export class ProfileService {
 
     const profile = result[0];
 
-    // Don't expose private information for private accounts
-    if (profile.isPrivate) {
-      return this.stripSensitiveData(profile);
-    }
-
-    return this.toResponseDto(profile);
+    return this.toPublicResponseDto(profile);
   }
 
   /**
@@ -129,7 +125,7 @@ export class ProfileService {
         })
         .returning();
 
-      this.logger.log(`Profile created for user: ${keycloakSub}`);
+      this.logger.log('PROFILE_CREATED');
       return this.toResponseDto(newProfile);
     } catch (error) {
       if ((error as Error).message.includes('unique')) {
@@ -157,7 +153,7 @@ export class ProfileService {
       throw new NotFoundException('PROFILE_NOT_FOUND');
     }
 
-    this.logger.log(`Business profile ${verifyDto.status}: ${profileId}`);
+    this.logger.log('BUSINESS_PROFILE_VERIFICATION_UPDATED');
     return this.toResponseDto(updated);
   }
 
@@ -194,7 +190,7 @@ export class ProfileService {
       .where(eq(profiles.keycloakSub, keycloakSub))
       .returning();
 
-    this.logger.log(`Profile updated for user: ${keycloakSub}`);
+    this.logger.log('PROFILE_UPDATED');
     return this.toResponseDto(updated);
   }
 
@@ -223,7 +219,7 @@ export class ProfileService {
       .where(eq(profiles.keycloakSub, keycloakSub))
       .returning();
 
-    this.logger.log(`Avatar uploaded for user: ${keycloakSub}`);
+    this.logger.log('PROFILE_AVATAR_UPLOADED');
     return this.toResponseDto(updated);
   }
 
@@ -247,7 +243,7 @@ export class ProfileService {
       .where(eq(profiles.keycloakSub, keycloakSub))
       .returning();
 
-    this.logger.log(`Avatar deleted for user: ${keycloakSub}`);
+    this.logger.log('PROFILE_AVATAR_DELETED');
     return this.toResponseDto(updated);
   }
 
@@ -289,7 +285,7 @@ export class ProfileService {
       .where(eq(profiles.keycloakSub, keycloakSub))
       .returning();
 
-    this.logger.log(`Business profile created for user: ${keycloakSub}`);
+    this.logger.log('BUSINESS_PROFILE_CREATED');
     return this.toResponseDto(updated);
   }
 
@@ -334,7 +330,7 @@ export class ProfileService {
       .where(eq(profiles.keycloakSub, keycloakSub))
       .returning();
 
-    this.logger.log(`Business profile updated for user: ${keycloakSub}`);
+    this.logger.log('BUSINESS_PROFILE_UPDATED');
     return this.toResponseDto(updated);
   }
 
@@ -394,7 +390,7 @@ export class ProfileService {
       })
       .where(eq(profiles.keycloakSub, keycloakSub));
 
-    this.logger.log(`Phone verification requested for user: ${keycloakSub}`);
+    this.logger.log('PHONE_VERIFICATION_REQUESTED');
     return {
       status: 'PHONE_VERIFICATION_CODE_SENT',
       expiresInSeconds: PHONE_VERIFICATION_CODE_TTL_MS / 1000
@@ -475,7 +471,7 @@ export class ProfileService {
       throw new ConflictException('PHONE_VERIFICATION_STATE_CHANGED');
     }
 
-    this.logger.log(`Phone verified for user: ${keycloakSub}`);
+    this.logger.log('PHONE_VERIFIED');
     return this.toResponseDto(updated);
   }
 
@@ -508,7 +504,6 @@ export class ProfileService {
   private toResponseDto(profile: ProfileRecord): ProfileResponseDto {
     return {
       id: profile.id,
-      keycloakSub: profile.keycloakSub,
       accountType: 'personal',
       firstName: profile.firstName ?? undefined,
       lastName: profile.lastName ?? undefined,
@@ -526,23 +521,25 @@ export class ProfileService {
     };
   }
 
-  /**
-   * Strip sensitive data for private profiles
-   */
-  private stripSensitiveData(profile: ProfileRecord): ProfileResponseDto {
-    return {
+  private toPublicResponseDto(profile: ProfileRecord): PublicProfileResponseDto {
+    const common = {
       id: profile.id,
-      keycloakSub: profile.keycloakSub,
-      accountType: 'personal',
       firstName: profile.firstName ?? undefined,
       lastName: profile.lastName ?? undefined,
-      // Don't expose email, bio for private accounts
-      isPrivate: profile.isPrivate,
-      isPhoneVerified: profile.isPhoneVerified,
+      username: profile.username ?? undefined,
+      avatarUrl: profile.avatarUrl ?? undefined,
       followersCount: profile.followersCount,
       followingCount: profile.followingCount,
-      createdAt: profile.createdAt,
-      updatedAt: profile.updatedAt
+      isPrivate: profile.isPrivate,
+      createdAt: profile.createdAt
     };
+
+    return profile.isPrivate
+      ? common
+      : {
+          ...common,
+          bio: profile.bio ?? undefined,
+          interests: profile.interests ?? undefined
+        };
   }
 }

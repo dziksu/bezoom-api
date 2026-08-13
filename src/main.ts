@@ -17,7 +17,14 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const logger = app.get(JsonLoggerService);
   app.useLogger(logger);
+  app.enableShutdownHooks();
   const port = configService.get<number>('API_PORT', 4000);
+  const trustProxyHops = configService.get<number>('throttle.trustProxyHops', 0);
+
+  if (Number.isInteger(trustProxyHops) && trustProxyHops > 0) {
+    const express = app.getHttpAdapter().getInstance() as { set(setting: string, value: number): void };
+    express.set('trust proxy', trustProxyHops);
+  }
 
   app.setGlobalPrefix(GLOBAL_PREFIX);
 

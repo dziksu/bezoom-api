@@ -1,6 +1,11 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+export function isApiAccessToken(payload: Record<string, unknown>, audience: string): boolean {
+  const tokenAudiences = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
+  return payload.typ === 'Bearer' && tokenAudiences.includes(audience);
+}
+
 @Injectable()
 export class KeycloakTokenVerifier {
   private verifyToken?: Promise<(token: string) => Promise<unknown>>;
@@ -47,13 +52,7 @@ export class KeycloakTokenVerifier {
         issuer,
         algorithms: ['RS256']
       });
-      const tokenAudiences = Array.isArray(result.payload.aud)
-        ? result.payload.aud
-        : result.payload.aud
-          ? [result.payload.aud]
-          : [];
-      const authorizedParty = result.payload.azp;
-      if (!tokenAudiences.includes(audience) && authorizedParty !== audience) {
+      if (!isApiAccessToken(result.payload, audience)) {
         throw new Error('TOKEN_AUDIENCE_INVALID');
       }
       return result.payload;

@@ -15,8 +15,15 @@ import { ApiOperation, ApiResponse, ApiTags, ApiConsumes, ApiBody, ApiBearerAuth
 import type { Express } from 'express';
 import { CurrentUser } from '@api/shared/infrastructure/auth';
 import type { ICurrentUser } from '@api/shared/infrastructure/auth';
+import { RedisRateLimit } from '@api/shared/infrastructure/rate-limit';
 import { ProfileService } from './services/profile.service';
-import { UpdateProfileDto, RequestPhoneVerificationDto, VerifyPhoneDto, ProfileResponseDto } from './dto/profile.dto';
+import {
+  UpdateProfileDto,
+  RequestPhoneVerificationDto,
+  VerifyPhoneDto,
+  ProfileResponseDto,
+  PublicProfileResponseDto
+} from './dto/profile.dto';
 
 @ApiTags('User Profile')
 @ApiBearerAuth()
@@ -51,7 +58,7 @@ export class UserController {
   @ApiResponse({
     status: 200,
     description: 'Profile returned successfully',
-    type: ProfileResponseDto
+    type: PublicProfileResponseDto
   })
   @ApiResponse({ status: 404, description: 'Profile not found' })
   @Get('profile/:id')
@@ -104,7 +111,11 @@ export class UserController {
   })
   @ApiResponse({ status: 400, description: 'Invalid file' })
   @Post('profile/avatar')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 }
+    })
+  )
   async uploadAvatar(@CurrentUser() user: ICurrentUser, @UploadedFile() file: Express.Multer.File) {
     if (!file) {
       throw new BadRequestException('AVATAR_FILE_REQUIRED');
@@ -142,6 +153,10 @@ export class UserController {
   })
   @ApiResponse({ status: 400, description: 'Invalid phone number' })
   @Post('profile/phone/request-verification')
+  @RedisRateLimit(
+    { name: 'phone_otp_request_user', limit: 5, windowSeconds: 3600, scopes: ['user'] },
+    { name: 'phone_otp_request_ip', limit: 30, windowSeconds: 3600, scopes: ['ip'] }
+  )
   async requestPhoneVerification(@CurrentUser() user: ICurrentUser, @Body() requestDto: RequestPhoneVerificationDto) {
     return this.profileService.requestPhoneVerification(user.id, requestDto);
   }
@@ -160,6 +175,10 @@ export class UserController {
   })
   @ApiResponse({ status: 400, description: 'Invalid verification code' })
   @Post('profile/phone/verify')
+  @RedisRateLimit(
+    { name: 'phone_otp_verify_user', limit: 10, windowSeconds: 600, scopes: ['user'] },
+    { name: 'phone_otp_verify_ip', limit: 100, windowSeconds: 600, scopes: ['ip'] }
+  )
   async verifyPhone(@CurrentUser() user: ICurrentUser, @Body() verifyDto: VerifyPhoneDto) {
     return this.profileService.verifyPhone(user.id, verifyDto);
   }

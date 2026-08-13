@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class EventPhotoResponseDto {
   @ApiProperty()
@@ -30,8 +30,8 @@ export class EventResponseDto {
   @ApiProperty({ required: false })
   endDate?: Date;
 
-  @ApiProperty()
-  organizerKeycloakSub: string;
+  @ApiPropertyOptional({ description: 'Public profile id of the organizer.' })
+  organizerId?: string;
 
   @ApiProperty()
   latitude: number;
@@ -88,6 +88,23 @@ export class EventResponseDto {
   createdAt: Date;
 }
 
+export class EventLifecycleResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  status: string;
+
+  @ApiProperty()
+  mediaPipelineStatus: string;
+
+  @ApiProperty()
+  verificationStatus: string;
+
+  @ApiProperty()
+  updatedAt: Date;
+}
+
 export class EventSearchResultDto extends EventResponseDto {
   @ApiProperty({ description: 'Distance from the search origin, in kilometers' })
   distanceKm: number;
@@ -106,8 +123,16 @@ export class EventSearchResponseDto {
   @ApiProperty()
   limit: number;
 
-  @ApiProperty()
-  total: number;
+  @ApiProperty({
+    description: 'Whether another page exists. Geo discovery deliberately avoids an exact count on its hot path.'
+  })
+  hasMore: boolean;
+
+  @ApiPropertyOptional({
+    deprecated: true,
+    description: 'Deprecated and omitted for geo discovery. Use hasMore instead.'
+  })
+  total?: number;
 }
 
 export class EventDetailDto extends EventResponseDto {

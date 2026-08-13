@@ -1,0 +1,101 @@
+import { PgDialect } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
+import type { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
+import type { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
+import type { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
+import { MVP_DISCOVERY_RADIUS_METERS, SearchEventsByLocationHandler } from './search-events-by-location.handler';
+import { SearchEventsByLocationQuery } from './search-events-by-location.query';
+
+const searchRow = (id: string) => ({
+  id,
+  title: `Event ${id}`,
+  description: 'A sufficiently descriptive event description for discovery.',
+  category: 'MUSIC_AND_NIGHTLIFE',
+  start_date: new Date('2026-09-01T18:00:00.000Z'),
+  end_date: null,
+  organizer_id: 'cd7ee731-259a-46d8-93ea-5580753b3637',
+  price_type: 'FREE',
+  price_min: null,
+  price_max: null,
+  currency: 'PLN',
+  ticket_url: null,
+  price_notes: null,
+  amenities: [],
+  status: 'PUBLISHED',
+  visibility: 'PUBLIC',
+  verification_status: 'VERIFIED',
+  created_at: new Date('2026-08-01T10:00:00.000Z'),
+  latitude: '50.0647000',
+  longitude: '19.9450000',
+  address: null,
+  city: 'Krakow',
+  country: 'PL',
+  distance_m: 1250
+});
+
+describe('SearchEventsByLocationHandler', () => {
+  let capturedStatement: SQL | undefined;
+  let executeRows: ReturnType<typeof searchRow>[] = [];
+  const execute = jest.fn((statement: SQL) => {
+    capturedStatement = statement;
+    return Promise.resolve({ rows: executeRows });
+  });
+  const photoOrderBy = jest.fn().mockResolvedValue([]);
+  const photoWhere = jest.fn().mockReturnValue({ orderBy: photoOrderBy });
+  const photoFrom = jest.fn().mockReturnValue({ where: photoWhere });
+  const selectDistinctOn = jest.fn().mockReturnValue({ from: photoFrom });
+  const readService = { db: { execute, selectDistinctOn } } as unknown as DrizzleReadService;
+  const objectStorage = {
+    mediaBucket: 'bezoom-media',
+    getPublicUrl: jest.fn((bucket: string, key: string) => `${bucket}/${key}`)
+  } as unknown as ObjectStorageService;
+  const getOrSet = jest.fn((_namespace: string, _key: string, _ttl: number, loader: () => Promise<unknown>) =>
+    loader()
+  );
+  const cache = { getOrSet } as unknown as RedisCacheService;
+  const handler = new SearchEventsByLocationHandler(readService, objectStorage, cache);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    capturedStatement = undefined;
+    executeRows = [];
+    photoOrderBy.mockResolvedValue([]);
+  });
+
+  it('uses an indexable constant-radius ST_DWithin and avoids an exact count', async () => {
+    await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, undefined, 1, 20));
+
+    if (!capturedStatement) throw new Error('SEARCH_SQL_NOT_CAPTURED');
+    const compiled = new PgDialect().sqlToQuery(capturedStatement);
+    const normalizedSql = compiled.sql.replace(/\s+/g, ' ').toLowerCase();
+
+    expect(normalizedSql).toContain('join locations l on st_dwithin(l.geog, p.origin,');
+    expect(normalizedSql).toContain('and e.start_date > now()');
+    expect(normalizedSql).toContain('and e.radius_km =');
+    expect(normalizedSql).not.toContain('count(*) over');
+    expect(compiled.params).toContain(MVP_DISCOVERY_RADIUS_METERS);
+    expect(compiled.params).toContain(21);
+  });
+
+  it('fetches one extra row, trims it and exposes hasMore without total', async () => {
+    executeRows = [searchRow('one'), searchRow('two'), searchRow('three')];
+
+    const result = await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, 0, 1, 2));
+
+    expect(result.items.map((event) => event.id)).toEqual(['one', 'two']);
+    expect(result.items[0]).toMatchObject({ organizerId: 'cd7ee731-259a-46d8-93ea-5580753b3637' });
+    expect(result.items[0]).not.toHaveProperty('organizerKeycloakSub');
+    expect(result.hasMore).toBe(true);
+    expect(result.total).toBeUndefined();
+    expect(getOrSet).toHaveBeenCalledWith('event_search', expect.any(String), 15, expect.any(Function));
+  });
+
+  it('returns hasMore false for the last page', async () => {
+    executeRows = [searchRow('only')];
+
+    const result = await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, undefined, 1, 20));
+
+    expect(result.items).toHaveLength(1);
+    expect(result.hasMore).toBe(false);
+  });
+});

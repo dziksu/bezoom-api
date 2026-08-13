@@ -2,6 +2,9 @@ import { Type } from 'class-transformer';
 import { IsLatitude, IsLongitude, Min, Max, IsOptional, IsInt } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
+export const GEO_SEARCH_MAX_PAGE = 100;
+export const GEO_SEARCH_MAX_LIMIT = 50;
+
 export class SearchEventsQueryDto {
   @ApiProperty({ example: 50.0647, description: 'Latitude of the search origin' })
   @Type(() => Number)
@@ -30,6 +33,7 @@ export class SearchEventsQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(GEO_SEARCH_MAX_PAGE)
   page?: number = 1;
 
   @ApiProperty({ required: false, default: 20 })
@@ -37,6 +41,6 @@ export class SearchEventsQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(50)
+  @Max(GEO_SEARCH_MAX_LIMIT)
   limit?: number = 20;
 }

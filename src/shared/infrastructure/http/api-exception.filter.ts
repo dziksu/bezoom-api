@@ -72,8 +72,9 @@ export class ApiExceptionFilter implements ExceptionFilter {
     response.setHeader('x-request-id', requestId);
 
     if (status >= 500) {
+      const route = request.route?.path as string | undefined;
       this.logger.error(
-        `${request.method} ${request.originalUrl || request.url} failed (${requestId})`,
+        `${request.method} ${route ?? request.path} failed (${requestId})`,
         exception instanceof Error ? exception.stack : undefined
       );
     }

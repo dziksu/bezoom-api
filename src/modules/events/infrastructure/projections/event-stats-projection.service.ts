@@ -62,6 +62,14 @@ export class EventStatsProjectionService implements OnApplicationBootstrap, OnAp
           FROM event_outbox
           WHERE processed_at IS NULL
             AND event_type = 'event.stats.changed'
+            AND NOT EXISTS (
+              SELECT 1
+              FROM event_outbox earlier
+              WHERE earlier.processed_at IS NULL
+                AND earlier.event_type = 'event.stats.changed'
+                AND earlier.aggregate_id = event_outbox.aggregate_id
+                AND (earlier.occurred_at, earlier.id) < (event_outbox.occurred_at, event_outbox.id)
+            )
           ORDER BY occurred_at, id
           FOR UPDATE SKIP LOCKED
           LIMIT ${safeLimit}
@@ -89,7 +97,6 @@ export class EventStatsProjectionService implements OnApplicationBootstrap, OnAp
         UPDATE event_outbox outbox
         SET processed_at = now(), attempts = attempts + 1
         WHERE outbox.id IN (SELECT id FROM claimed)
-          AND EXISTS (SELECT 1 FROM projected WHERE projected.event_id = outbox.aggregate_id)
         RETURNING outbox.aggregate_id
       `);
 

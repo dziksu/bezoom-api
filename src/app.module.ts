@@ -5,6 +5,7 @@ import redisConfig from './shared/infrastructure/config/redis.config';
 import minioConfig from './shared/infrastructure/config/minio.config';
 import authConfig from './shared/infrastructure/config/auth.config';
 import throttleConfig from './shared/infrastructure/config/throttle.config';
+import eventPipelineConfig from './shared/infrastructure/config/event-pipeline.config';
 import { DrizzleModule } from './shared/infrastructure/drizzle.module';
 import { StorageModule } from './shared/infrastructure/storage/storage.module';
 import { HealthModule } from './modules/health/health.module';
@@ -13,16 +14,20 @@ import { UserModule } from './modules/user/user.module';
 import { EventsModule } from './modules/events/events.module';
 import { ObservabilityModule } from './shared/infrastructure/observability/observability.module';
 import { CacheModule } from './shared/infrastructure/cache/cache.module';
+import { BullConfigModule } from './shared/infrastructure/queue/bull.module';
+import { RateLimitModule } from './shared/infrastructure/rate-limit/rate-limit.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, redisConfig, minioConfig, authConfig, throttleConfig],
+      load: [databaseConfig, redisConfig, minioConfig, authConfig, throttleConfig, eventPipelineConfig],
       envFilePath: ['.env.local', '.env']
     }),
     ObservabilityModule,
     CacheModule,
+    RateLimitModule,
+    BullConfigModule,
     AuthModule,
     DrizzleModule,
     StorageModule,

@@ -65,6 +65,12 @@ services:
       MINIO_USE_SSL: 'false'
       MINIO_RAW_BUCKET: raw-uploads
       MINIO_MEDIA_BUCKET: media
+      MINIO_PRESIGN_ENDPOINT: ${MINIO_PRESIGN_ENDPOINT:-localhost}
+      MINIO_PRESIGN_PORT: ${MINIO_API_PORT:-9000}
+      MINIO_PRESIGN_USE_SSL: 'false'
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+      EVENT_PIPELINE_MODE: development_passthrough
+      EVENT_PIPELINE_DISPATCH_INTERVAL_MS: 500
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/bezoom/protocol/openid-connect/certs
       KEYCLOAK_ISSUER: http://localhost:${KEYCLOAK_HTTP_PORT:-8080}/realms/bezoom
       KEYCLOAK_CLIENT_ID: bezoom-api
@@ -134,11 +140,13 @@ services:
   redis:
     image: redis:8-alpine
     restart: unless-stopped
+    # BullMQ must never lose jobs to Redis eviction. Cache writes fail open and
+    # fall back to PostgreSQL if this local shared instance is full.
     command: >
       redis-server
       --appendonly no
       --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
+      --maxmemory-policy noeviction
       --requirepass ${REDIS_PASSWORD:-redis_dev}
     ports:
       - '${REDIS_PORT:-6379}:6379'

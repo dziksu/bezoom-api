@@ -9,7 +9,8 @@ import {
   eventLikes,
   eventSaves,
   eventParticipants,
-  eventStats
+  eventStats,
+  profiles
 } from '@api/shared/infrastructure/database/schema';
 import type {
   EventResponseDto,
@@ -62,8 +63,14 @@ export class EventReadService {
     if (rows.length === 0) return null;
 
     const photos = await this.fetchPhotos([id]);
+    const organizerIds = await this.fetchOrganizerIds([rows[0].event.organizerKeycloakSub]);
     return {
-      ...this.mapRow(rows[0].event, rows[0].location, photos.get(id) ?? []),
+      ...this.mapRow(
+        rows[0].event,
+        rows[0].location,
+        photos.get(id) ?? [],
+        organizerIds.get(rows[0].event.organizerKeycloakSub)
+      ),
       likesCount: rows[0].stats.likesCount,
       savesCount: rows[0].stats.savesCount,
       attendingCount: rows[0].stats.attendingCount,
@@ -155,9 +162,15 @@ export class EventReadService {
     ]);
 
     const photos = await this.fetchPhotos(rows.map((r) => r.event.id));
+    const organizerIds = await this.fetchOrganizerIds(rows.map((r) => r.event.organizerKeycloakSub));
     return {
       items: rows.map((r) => ({
-        ...this.mapRow(r.event, r.location, photos.get(r.event.id) ?? []),
+        ...this.mapRow(
+          r.event,
+          r.location,
+          photos.get(r.event.id) ?? [],
+          organizerIds.get(r.event.organizerKeycloakSub)
+        ),
         myRsvpStatus: r.myRsvpStatus
       })),
       total: totalRow?.value ?? 0
@@ -192,10 +205,25 @@ export class EventReadService {
     total: number
   ): Promise<Paginated<EventResponseDto>> {
     const photos = await this.fetchPhotos(rows.map((r) => r.event.id));
+    const organizerIds = await this.fetchOrganizerIds(rows.map((r) => r.event.organizerKeycloakSub));
     return {
-      items: rows.map((r) => this.mapRow(r.event, r.location, photos.get(r.event.id) ?? [])),
+      items: rows.map((r) =>
+        this.mapRow(r.event, r.location, photos.get(r.event.id) ?? [], organizerIds.get(r.event.organizerKeycloakSub))
+      ),
       total
     };
+  }
+
+  private async fetchOrganizerIds(subs: string[]): Promise<Map<string, string>> {
+    const uniqueSubs = [...new Set(subs)];
+    if (uniqueSubs.length === 0) return new Map();
+
+    const rows = await this.db
+      .select({ keycloakSub: profiles.keycloakSub, id: profiles.id })
+      .from(profiles)
+      .where(inArray(profiles.keycloakSub, uniqueSubs));
+
+    return new Map(rows.map((row) => [row.keycloakSub, row.id]));
   }
 
   private async fetchPhotos(eventIds: string[]): Promise<Map<string, EventPhotoResponseDto[]>> {
@@ -236,7 +264,12 @@ export class EventReadService {
     );
   }
 
-  private mapRow(event: EventRow, location: LocationRow, photos: EventPhotoResponseDto[]): EventResponseDto {
+  private mapRow(
+    event: EventRow,
+    location: LocationRow,
+    photos: EventPhotoResponseDto[],
+    organizerId?: string
+  ): EventResponseDto {
     return {
       id: event.id,
       title: event.title,
@@ -244,7 +277,7 @@ export class EventReadService {
       category: event.category,
       startDate: event.startDate,
       endDate: event.endDate ?? undefined,
-      organizerKeycloakSub: event.organizerKeycloakSub,
+      organizerId,
       latitude: Number(location.latitude),
       longitude: Number(location.longitude),
       address: location.address ?? undefined,
