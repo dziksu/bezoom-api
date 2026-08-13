@@ -17,11 +17,13 @@ describe('RequestPhotoUploadsHandler', () => {
       rawBucket: 'raw-uploads',
       getPresignedPutUrl
     } as unknown as ObjectStorageService;
+    const organizerPolicy = { getEligibilityError: jest.fn().mockResolvedValue(null) };
 
     return {
-      handler: new RequestPhotoUploadsHandler(eventRepository, objectStorage),
+      handler: new RequestPhotoUploadsHandler(eventRepository, objectStorage, organizerPolicy),
       createPendingPhotos,
-      getPresignedPutUrl
+      getPresignedPutUrl,
+      organizerPolicy
     };
   };
 
@@ -43,4 +45,18 @@ describe('RequestPhotoUploadsHandler', () => {
     expect(insertedPhotos[0].rawKey).toMatch(/^events\/pending\/organizer-sub\/.+\.jpg$/);
     expect(insertedPhotos[1].rawKey).toMatch(/^events\/pending\/organizer-sub\/.+\.png$/);
   });
+
+  it.each(['PROFILE_ONBOARDING_REQUIRED', 'PHONE_VERIFICATION_REQUIRED'] as const)(
+    'does not allocate storage when organizer eligibility fails with %s',
+    async (errorCode) => {
+      const { handler, organizerPolicy, createPendingPhotos, getPresignedPutUrl } = buildHandler();
+      organizerPolicy.getEligibilityError.mockResolvedValue(errorCode);
+
+      await expect(
+        handler.execute(new RequestPhotoUploadsCommand('organizer-sub', [{ mimeType: 'image/jpeg' }]))
+      ).rejects.toMatchObject({ response: { message: errorCode } });
+      expect(createPendingPhotos).not.toHaveBeenCalled();
+      expect(getPresignedPutUrl).not.toHaveBeenCalled();
+    }
+  );
 });

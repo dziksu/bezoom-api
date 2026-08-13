@@ -81,7 +81,7 @@ export class UserController {
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @Patch('profile')
   async updateProfile(@CurrentUser() user: ICurrentUser, @Body() updateDto: UpdateProfileDto) {
-    return this.profileService.updateProfile(user.id, updateDto);
+    return this.profileService.updateProfile(user.id, updateDto, user.email);
   }
 
   /**
@@ -89,7 +89,7 @@ export class UserController {
    */
   @ApiOperation({
     summary: 'Upload user avatar',
-    description: 'Upload a profile avatar image (JPEG, PNG, WebP, GIF - max 5MB)'
+    description: 'Upload an optional profile avatar image (JPEG, PNG or WebP - max 5MB)'
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -111,6 +111,10 @@ export class UserController {
   })
   @ApiResponse({ status: 400, description: 'Invalid file' })
   @Post('profile/avatar')
+  @RedisRateLimit(
+    { name: 'profile_avatar_user', limit: 10, windowSeconds: 3600, scopes: ['user'] },
+    { name: 'profile_avatar_ip', limit: 30, windowSeconds: 3600, scopes: ['ip'] }
+  )
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 5 * 1024 * 1024, files: 1 }
@@ -120,7 +124,7 @@ export class UserController {
     if (!file) {
       throw new BadRequestException('AVATAR_FILE_REQUIRED');
     }
-    return this.profileService.uploadAvatar(user.id, file);
+    return this.profileService.uploadAvatar(user.id, file, user.email);
   }
 
   /**
@@ -137,7 +141,7 @@ export class UserController {
   })
   @Delete('profile/avatar')
   async deleteAvatar(@CurrentUser() user: ICurrentUser) {
-    return this.profileService.deleteAvatar(user.id);
+    return this.profileService.deleteAvatar(user.id, user.email);
   }
 
   /**
@@ -158,7 +162,7 @@ export class UserController {
     { name: 'phone_otp_request_ip', limit: 30, windowSeconds: 3600, scopes: ['ip'] }
   )
   async requestPhoneVerification(@CurrentUser() user: ICurrentUser, @Body() requestDto: RequestPhoneVerificationDto) {
-    return this.profileService.requestPhoneVerification(user.id, requestDto);
+    return this.profileService.requestPhoneVerification(user.id, requestDto, user.email);
   }
 
   /**
@@ -180,7 +184,7 @@ export class UserController {
     { name: 'phone_otp_verify_ip', limit: 100, windowSeconds: 600, scopes: ['ip'] }
   )
   async verifyPhone(@CurrentUser() user: ICurrentUser, @Body() verifyDto: VerifyPhoneDto) {
-    return this.profileService.verifyPhone(user.id, verifyDto);
+    return this.profileService.verifyPhone(user.id, verifyDto, user.email);
   }
 
   /**

@@ -8,8 +8,10 @@ import {
   ArrayMaxSize,
   IsUrl,
   IsNotEmpty,
-  Matches
+  Matches,
+  IsBoolean
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 
 /**
@@ -22,6 +24,7 @@ export class UpdateProfileDto {
   @IsString()
   @MinLength(1)
   @MaxLength(50)
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   firstName?: string;
 
   @ApiProperty({ example: 'Doe', required: false })
@@ -29,22 +32,27 @@ export class UpdateProfileDto {
   @IsString()
   @MinLength(1)
   @MaxLength(50)
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   lastName?: string;
 
   @ApiProperty({ example: 'john_doe', required: false })
   @IsOptional()
   @IsString()
   @MinLength(3)
-  @MaxLength(30)
-  @Matches(/^[a-zA-Z0-9_-]+$/, {
+  @MaxLength(20)
+  @Matches(/^[a-z0-9_-]+$/, {
     message: 'Username can only contain letters, numbers, underscores, and hyphens'
   })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLocaleLowerCase('en-US') : value
+  )
   username?: string;
 
   @ApiProperty({ example: 'I love exploring local events!', required: false })
   @IsOptional()
   @IsString()
   @MaxLength(500)
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   bio?: string;
 
   @ApiProperty({ example: ['music', 'sports', 'art'], required: false })
@@ -57,6 +65,8 @@ export class UpdateProfileDto {
 
   @ApiProperty({ example: false, required: false })
   @IsOptional()
+  @Transform(({ obj, key }: { obj: Record<string, unknown>; key: string }) => obj[key])
+  @IsBoolean()
   isPrivate?: boolean;
 }
 
@@ -196,6 +206,9 @@ export class ProfileResponseDto {
 
   @ApiProperty()
   isPrivate: boolean;
+
+  @ApiProperty({ description: 'True after the user has chosen a unique public username.' })
+  onboardingCompleted: boolean;
 
   @ApiProperty()
   createdAt: Date;

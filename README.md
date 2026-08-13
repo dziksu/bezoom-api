@@ -74,6 +74,12 @@ CI uruchamia powyższe kontrole na każdym pull requeście. Osobny job integracy
 
 Procedura dziennego backupu, odtwarzania oraz testu RPO/RTO znajduje się w [runbooku PostgreSQL](docs/operations/postgres-backup-restore.md).
 
+## Onboarding profilu osobistego
+
+Pierwsze `GET /api/user/profile` atomowo zakłada bezpłatny profil osobisty. Odpowiedź zawiera `onboardingCompleted: false`, dopóki użytkownik nie wybierze globalnie unikalnego nicku przez `PATCH /api/user/profile`. Nick ma 3–20 znaków, jest normalizowany do małych liter i może zawierać litery `a-z`, cyfry, `_` oraz `-`.
+
+Avatar jest opcjonalny i można go dodać podczas onboardingu lub później przez `POST /api/user/profile/avatar`. Obraz trafia do MinIO lokalnie i do S3-compatible storage docelowo; API weryfikuje limit 5 MiB, deklarowany MIME oraz sygnaturę JPEG/PNG/WebP. Numer telefonu nie jest częścią podstawowego onboardingu. Użytkownik potrzebuje zweryfikowanego telefonu dopiero przed pobraniem URL-i uploadu zdjęć i rozpoczęciem tworzenia eventu.
+
 ## Zasady publikacji eventu
 
 Nowy event nie staje się publiczny automatycznie. Przechodzi przez upload, moderację/weryfikację i przygotowanie mediów. Feed, wyszukiwanie, szczegóły oraz engagement dopuszczają tylko eventy publiczne, opublikowane, zweryfikowane i z mediami `READY`. Promień MVP wynosi stałe 5 km i nie może zostać kupiony ani ustawiony przez klienta.

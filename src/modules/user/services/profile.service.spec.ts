@@ -12,9 +12,16 @@ describe('ProfileService phone verification', () => {
       email: 'user@example.com',
       phoneVerificationSentAt: null
     };
-    const limit = jest.fn().mockResolvedValueOnce([profile]).mockResolvedValueOnce([]);
-    const select = jest.fn(() => ({
-      from: () => ({ where: () => ({ limit }) })
+    const writeLimit = jest.fn().mockResolvedValue([profile]);
+    const writeSelect = jest.fn(() => ({
+      from: () => ({ where: () => ({ limit: writeLimit }) })
+    }));
+    const readLimit = jest.fn().mockResolvedValue([]);
+    const readSelect = jest.fn(() => ({
+      from: () => ({ where: () => ({ limit: readLimit }) })
+    }));
+    const insert = jest.fn(() => ({
+      values: () => ({ onConflictDoNothing: () => ({ returning: jest.fn().mockResolvedValue([]) }) })
     }));
     let persisted: Record<string, unknown> = {};
     const where = jest.fn().mockResolvedValue(undefined);
@@ -27,8 +34,8 @@ describe('ProfileService phone verification', () => {
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
     const send = jest.fn<Promise<void>, [PhoneVerificationMessage]>().mockResolvedValue(undefined);
     const service = new ProfileService(
-      { db: { update } } as never,
-      { db: { select } } as never,
+      { db: { insert, select: writeSelect, update } } as never,
+      { db: { select: readSelect } } as never,
       {} as never,
       new ConfigService({ PHONE_VERIFICATION_HASH_SECRET: 'test-secret' }),
       { send },

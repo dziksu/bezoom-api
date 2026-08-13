@@ -11,9 +11,7 @@ export interface ObjectStat {
 /**
  * Presigned-URL / server-side object storage operations against MinIO.
  *
- * Unlike `FileStorageService` (which switches to local disk in dev), this service always
- * talks to a real MinIO endpoint — presigned URLs are meaningless against local disk, and
- * docker-compose provides MinIO in dev too.
+ * Uses the same S3-compatible API for local MinIO and production object storage.
  */
 @Injectable()
 export class ObjectStorageService {
@@ -23,6 +21,7 @@ export class ObjectStorageService {
 
   readonly rawBucket: string;
   readonly mediaBucket: string;
+  readonly avatarBucket: string;
   private readonly publicUrl?: string;
   private readonly endPoint: string;
   private readonly port: number;
@@ -37,6 +36,7 @@ export class ObjectStorageService {
     this.useSSL = minioConfig.useSSL;
     this.rawBucket = minioConfig.rawBucket;
     this.mediaBucket = minioConfig.mediaBucket;
+    this.avatarBucket = minioConfig.avatarBucket;
     this.publicUrl = minioConfig.publicUrl;
 
     this.client = new MinioClient({
@@ -79,13 +79,22 @@ export class ObjectStorageService {
   }
 
   async ping(): Promise<void> {
-    const [rawBucketExists, mediaBucketExists] = await Promise.all([
+    const [rawBucketExists, mediaBucketExists, avatarBucketExists] = await Promise.all([
       this.client.bucketExists(this.rawBucket),
-      this.client.bucketExists(this.mediaBucket)
+      this.client.bucketExists(this.mediaBucket),
+      this.client.bucketExists(this.avatarBucket)
     ]);
-    if (!rawBucketExists || !mediaBucketExists) {
+    if (!rawBucketExists || !mediaBucketExists || !avatarBucketExists) {
       throw new Error('OBJECT_STORAGE_BUCKET_UNAVAILABLE');
     }
+  }
+
+  async putObject(bucket: string, key: string, body: Buffer, metadata: Record<string, string> = {}): Promise<void> {
+    await this.client.putObject(bucket, key, body, body.length, metadata);
+  }
+
+  async removeObject(bucket: string, key: string): Promise<void> {
+    await this.client.removeObject(bucket, key);
   }
 
   /** Server-side copy between buckets (used to move a confirmed photo from raw-uploads to media). */

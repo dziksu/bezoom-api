@@ -29,14 +29,17 @@ describe('CreateEventHandler', () => {
       copyObject: jest.fn().mockResolvedValue(undefined),
       getPublicUrl: jest.fn().mockReturnValue('https://media.local/photo.jpg')
     };
+    const organizerPolicy = { getEligibilityError: jest.fn().mockResolvedValue(null) };
 
     return {
       handler: new CreateEventHandler(
         eventRepository as unknown as EventRepository,
-        objectStorage as unknown as ObjectStorageService
+        objectStorage as unknown as ObjectStorageService,
+        organizerPolicy
       ),
       eventRepository,
-      objectStorage
+      objectStorage,
+      organizerPolicy
     };
   };
 
@@ -71,6 +74,19 @@ describe('CreateEventHandler', () => {
 
     await expect(handler.execute(buildCommand([randomUUID()]))).rejects.toThrow(BadRequestException);
   });
+
+  it.each(['PROFILE_ONBOARDING_REQUIRED', 'PHONE_VERIFICATION_REQUIRED'] as const)(
+    'rejects before reading uploads when organizer eligibility fails with %s',
+    async (errorCode) => {
+      const { handler, organizerPolicy, eventRepository } = buildHandler([]);
+      organizerPolicy.getEligibilityError.mockResolvedValue(errorCode);
+
+      await expect(handler.execute(buildCommand([randomUUID()]))).rejects.toMatchObject({
+        response: { message: errorCode }
+      });
+      expect(eventRepository.findPendingPhotosByIds).not.toHaveBeenCalled();
+    }
+  );
 
   it('rejects when the photo was never uploaded to the raw bucket', async () => {
     const photoId = randomUUID();

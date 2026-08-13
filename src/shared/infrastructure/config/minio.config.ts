@@ -8,6 +8,7 @@ export interface MinioConfig {
   useSSL: boolean;
   rawBucket: string;
   mediaBucket: string;
+  avatarBucket: string;
   publicUrl?: string;
   presignEndPoint: string;
   presignPort: number;
@@ -22,6 +23,7 @@ export default registerAs('minio', (): MinioConfig => ({
   useSSL: process.env.MINIO_USE_SSL === 'true',
   rawBucket: process.env.MINIO_RAW_BUCKET || 'raw-uploads',
   mediaBucket: process.env.MINIO_MEDIA_BUCKET || 'media',
+  avatarBucket: process.env.MINIO_AVATAR_BUCKET || 'avatars',
   // Public-facing host for serving media (e.g. a CDN or reverse-proxy in front of MinIO).
   // Falls back to the direct MinIO endpoint if unset.
   publicUrl: process.env.MINIO_PUBLIC_URL || undefined,

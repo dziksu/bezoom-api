@@ -1,15 +1,12 @@
 import { Module } from '@nestjs/common';
-import { FileStorageService } from './file-storage.service';
 import { ObjectStorageService } from './object-storage.service';
 
 /**
  * StorageModule
- * Provides file storage abstraction layer
- * - FileStorageService: MinIO for production S3-compatible storage, local disk in dev
- * - ObjectStorageService: presigned-URL MinIO operations (always real MinIO, dev included)
+ * Provides one S3-compatible storage abstraction for MinIO and R2.
  */
 @Module({
-  providers: [FileStorageService, ObjectStorageService],
-  exports: [FileStorageService, ObjectStorageService]
+  providers: [ObjectStorageService],
+  exports: [ObjectStorageService]
 })
 export class StorageModule {}

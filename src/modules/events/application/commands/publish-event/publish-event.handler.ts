@@ -21,9 +21,8 @@ export class PublishEventHandler implements ICommandHandler<PublishEventCommand,
       throw new NotFoundException('EVENT_NOT_FOUND');
     }
 
-    if (!(await this.publicationPolicy.canPublish(command.organizerKeycloakSub))) {
-      throw new ConflictException('PHONE_VERIFICATION_REQUIRED');
-    }
+    const eligibilityError = await this.publicationPolicy.getEligibilityError(command.organizerKeycloakSub);
+    if (eligibilityError) throw new ConflictException(eligibilityError);
 
     try {
       event.publish();

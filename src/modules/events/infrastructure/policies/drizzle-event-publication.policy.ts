@@ -1,8 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { profiles } from '@api/shared/infrastructure/database/schema';
-import { EventPublicationPolicy } from '../../application/policies/event-publication.policy';
+import {
+  EventPublicationPolicy,
+  type EventOrganizerEligibilityError
+} from '../../application/policies/event-publication.policy';
 
 @Injectable()
 export class DrizzleEventPublicationPolicy extends EventPublicationPolicy {
@@ -10,22 +13,24 @@ export class DrizzleEventPublicationPolicy extends EventPublicationPolicy {
     super();
   }
 
-  async canPublish(organizerKeycloakSub: string): Promise<boolean> {
+  async getEligibilityError(organizerKeycloakSub: string): Promise<EventOrganizerEligibilityError | null> {
     // Authorization decisions must use the primary: a read replica may lag
     // immediately after successful phone verification.
     const [profile] = await this.writeService.db
-      .select({ id: profiles.id })
+      .select({
+        username: profiles.username,
+        accountType: profiles.accountType,
+        isPhoneVerified: profiles.isPhoneVerified,
+        isDeactivated: profiles.isDeactivated
+      })
       .from(profiles)
-      .where(
-        and(
-          eq(profiles.keycloakSub, organizerKeycloakSub),
-          eq(profiles.accountType, 'personal'),
-          eq(profiles.isPhoneVerified, true),
-          eq(profiles.isDeactivated, false)
-        )
-      )
+      .where(eq(profiles.keycloakSub, organizerKeycloakSub))
       .limit(1);
 
-    return Boolean(profile);
+    if (!profile || !profile.username) return 'PROFILE_ONBOARDING_REQUIRED';
+    if (profile.isDeactivated) return 'ACCOUNT_DEACTIVATED';
+    if (profile.accountType !== 'personal') return 'PERSONAL_ACCOUNT_REQUIRED';
+    if (!profile.isPhoneVerified) return 'PHONE_VERIFICATION_REQUIRED';
+    return null;
   }
 }

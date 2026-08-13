@@ -26,12 +26,12 @@ describe('PublishEventHandler', () => {
     return event;
   };
 
-  const build = (event: Event | null, canPublish = true) => {
+  const build = (event: Event | null, eligibilityError: string | null = null) => {
     const repository = {
       findById: jest.fn().mockResolvedValue(event),
       updateLifecycle: jest.fn().mockResolvedValue(undefined)
     };
-    const policy = { canPublish: jest.fn().mockResolvedValue(canPublish) };
+    const policy = { getEligibilityError: jest.fn().mockResolvedValue(eligibilityError) };
     const cache = { delete: jest.fn().mockResolvedValue(undefined) };
     const handler = new PublishEventHandler(
       repository as unknown as EventRepository,
@@ -63,7 +63,7 @@ describe('PublishEventHandler', () => {
 
   it('requires a verified phone', async () => {
     const event = readyEvent();
-    const { handler } = build(event, false);
+    const { handler } = build(event, 'PHONE_VERIFICATION_REQUIRED');
 
     await expect(handler.execute(new PublishEventCommand(event.id, 'organizer-sub'))).rejects.toMatchObject({
       response: { message: 'PHONE_VERIFICATION_REQUIRED' }

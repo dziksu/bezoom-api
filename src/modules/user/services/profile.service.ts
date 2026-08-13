@@ -10,10 +10,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq, and, lt, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
 import { profiles } from '@api/shared/infrastructure/database/schema/profiles';
-import { FileStorageService } from '@api/shared/infrastructure/storage/file-storage.service';
+import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import {
   UpdateProfileDto,
   CreateBusinessProfileDto,
@@ -34,6 +35,7 @@ import {
 } from './phone-verification';
 import { PhoneVerificationDelivery } from './phone-verification-delivery';
 import { UserBlockRepository } from '@api/modules/safety/domain/user-block.repository';
+import { AVATAR_MAX_BYTES, detectAvatarImage } from './avatar-image';
 
 type ProfileRecord = typeof profiles.$inferSelect;
 
@@ -53,7 +55,7 @@ export class ProfileService {
   constructor(
     private readonly drizzleWrite: DrizzleWriteService,
     private readonly drizzleRead: DrizzleReadService,
-    private readonly fileStorage: FileStorageService,
+    private readonly objectStorage: ObjectStorageService,
     private readonly config: ConfigService,
     private readonly phoneVerificationDelivery: PhoneVerificationDelivery,
     private readonly userBlocks: UserBlockRepository
@@ -75,6 +77,37 @@ export class ProfileService {
     }
 
     return result[0];
+  }
+
+  /** Atomically provisions the personal profile on the first authenticated request. */
+  private async ensureProfile(keycloakSub: string, email?: string): Promise<ProfileRecord> {
+    const [created] = await this.drizzleWrite.db
+      .insert(profiles)
+      .values({ keycloakSub, email: email || null, accountType: 'personal' })
+      .onConflictDoNothing({ target: profiles.keycloakSub })
+      .returning();
+    if (created) {
+      this.logger.log('PROFILE_CREATED');
+      return created;
+    }
+
+    const [existing] = await this.drizzleWrite.db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.keycloakSub, keycloakSub))
+      .limit(1);
+    if (!existing) throw new NotFoundException('PROFILE_NOT_FOUND');
+
+    if (email && existing.email !== email) {
+      const [synced] = await this.drizzleWrite.db
+        .update(profiles)
+        .set({ email, updatedAt: new Date() })
+        .where(eq(profiles.keycloakSub, keycloakSub))
+        .returning();
+      return synced;
+    }
+
+    return existing;
   }
 
   /**
@@ -99,15 +132,7 @@ export class ProfileService {
    * Get authenticated user's profile
    */
   async getMyProfile(keycloakSub: string, email?: string): Promise<ProfileResponseDto> {
-    try {
-      const profile = await this.getProfileBySub(keycloakSub);
-      return this.toResponseDto(profile);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        return this.createProfile(keycloakSub, email ?? '');
-      }
-      throw error;
-    }
+    return this.toResponseDto(await this.ensureProfile(keycloakSub, email));
   }
 
   /**
@@ -120,26 +145,14 @@ export class ProfileService {
     firstName?: string,
     lastName?: string
   ): Promise<ProfileResponseDto> {
-    try {
-      const [newProfile] = await this.drizzleWrite.db
-        .insert(profiles)
-        .values({
-          keycloakSub,
-          email,
-          firstName,
-          lastName,
-          accountType: 'personal'
-        })
-        .returning();
-
-      this.logger.log('PROFILE_CREATED');
-      return this.toResponseDto(newProfile);
-    } catch (error) {
-      if ((error as Error).message.includes('unique')) {
-        throw new ConflictException('PROFILE_ALREADY_EXISTS');
-      }
-      throw error;
-    }
+    const profile = await this.ensureProfile(keycloakSub, email);
+    if (!firstName && !lastName) return this.toResponseDto(profile);
+    const [updated] = await this.drizzleWrite.db
+      .update(profiles)
+      .set({ firstName: firstName ?? profile.firstName, lastName: lastName ?? profile.lastName, updatedAt: new Date() })
+      .where(eq(profiles.keycloakSub, keycloakSub))
+      .returning();
+    return this.toResponseDto(updated);
   }
 
   /**
@@ -167,35 +180,28 @@ export class ProfileService {
   /**
    * Update personal profile
    */
-  async updateProfile(keycloakSub: string, updateDto: UpdateProfileDto): Promise<ProfileResponseDto> {
-    const profile = await this.getProfileBySub(keycloakSub);
+  async updateProfile(keycloakSub: string, updateDto: UpdateProfileDto, email?: string): Promise<ProfileResponseDto> {
+    const profile = await this.ensureProfile(keycloakSub, email);
 
-    // Check if trying to update username - verify uniqueness
-    if (updateDto.username && updateDto.username !== profile.username) {
-      const existingUsername = await this.drizzleRead.db
-        .select()
-        .from(profiles)
-        .where(eq(profiles.username, updateDto.username))
-        .limit(1);
-
-      if (existingUsername.length > 0) {
-        throw new ConflictException('USERNAME_ALREADY_TAKEN');
-      }
+    let updated: ProfileRecord;
+    try {
+      [updated] = await this.drizzleWrite.db
+        .update(profiles)
+        .set({
+          firstName: updateDto.firstName ?? profile.firstName,
+          lastName: updateDto.lastName ?? profile.lastName,
+          username: updateDto.username ?? profile.username,
+          bio: updateDto.bio ?? profile.bio,
+          interests: updateDto.interests ?? profile.interests,
+          isPrivate: updateDto.isPrivate !== undefined ? updateDto.isPrivate : profile.isPrivate,
+          updatedAt: new Date()
+        })
+        .where(eq(profiles.keycloakSub, keycloakSub))
+        .returning();
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') throw new ConflictException('USERNAME_ALREADY_TAKEN');
+      throw error;
     }
-
-    const [updated] = await this.drizzleWrite.db
-      .update(profiles)
-      .set({
-        firstName: updateDto.firstName ?? profile.firstName,
-        lastName: updateDto.lastName ?? profile.lastName,
-        username: updateDto.username ?? profile.username,
-        bio: updateDto.bio ?? profile.bio,
-        interests: updateDto.interests ?? profile.interests,
-        isPrivate: updateDto.isPrivate !== undefined ? updateDto.isPrivate : profile.isPrivate,
-        updatedAt: new Date()
-      })
-      .where(eq(profiles.keycloakSub, keycloakSub))
-      .returning();
 
     this.logger.log('PROFILE_UPDATED');
     return this.toResponseDto(updated);
@@ -204,27 +210,35 @@ export class ProfileService {
   /**
    * Upload avatar
    */
-  async uploadAvatar(keycloakSub: string, file: Express.Multer.File): Promise<ProfileResponseDto> {
-    const profile = await this.getProfileBySub(keycloakSub);
+  async uploadAvatar(keycloakSub: string, file: Express.Multer.File, email?: string): Promise<ProfileResponseDto> {
+    const profile = await this.ensureProfile(keycloakSub, email);
+    if (file.size > AVATAR_MAX_BYTES) {
+      throw new BadRequestException({ code: 'FILE_SIZE_EXCEEDED', details: { maxBytes: AVATAR_MAX_BYTES } });
+    }
+    const image = detectAvatarImage(file.buffer);
+    if (!image || image.mimeType !== file.mimetype) throw new BadRequestException('AVATAR_IMAGE_INVALID');
 
-    // Delete old avatar if exists
-    if (profile.avatarStoragePath) {
-      await this.fileStorage.deleteFile(profile.avatarStoragePath);
+    const key = `profiles/${profile.id}/${randomUUID()}.${image.extension}`;
+    const storagePath = `${this.objectStorage.avatarBucket}/${key}`;
+    const avatarUrl = this.objectStorage.getPublicUrl(this.objectStorage.avatarBucket, key);
+    await this.objectStorage.putObject(this.objectStorage.avatarBucket, key, file.buffer, {
+      'Content-Type': image.mimeType,
+      'Cache-Control': 'public, max-age=31536000, immutable'
+    });
+
+    let updated: ProfileRecord;
+    try {
+      [updated] = await this.drizzleWrite.db
+        .update(profiles)
+        .set({ avatarUrl, avatarStoragePath: storagePath, updatedAt: new Date() })
+        .where(eq(profiles.keycloakSub, keycloakSub))
+        .returning();
+    } catch (error) {
+      await this.removeAvatar(storagePath);
+      throw error;
     }
 
-    // Upload new avatar
-    const uploadResult = await this.fileStorage.uploadFile(file, 'avatars');
-
-    // Update profile
-    const [updated] = await this.drizzleWrite.db
-      .update(profiles)
-      .set({
-        avatarUrl: uploadResult.url,
-        avatarStoragePath: uploadResult.storagePath,
-        updatedAt: new Date()
-      })
-      .where(eq(profiles.keycloakSub, keycloakSub))
-      .returning();
+    if (profile.avatarStoragePath) await this.removeAvatar(profile.avatarStoragePath);
 
     this.logger.log('PROFILE_AVATAR_UPLOADED');
     return this.toResponseDto(updated);
@@ -233,12 +247,8 @@ export class ProfileService {
   /**
    * Delete avatar
    */
-  async deleteAvatar(keycloakSub: string): Promise<ProfileResponseDto> {
-    const profile = await this.getProfileBySub(keycloakSub);
-
-    if (profile.avatarStoragePath) {
-      await this.fileStorage.deleteFile(profile.avatarStoragePath);
-    }
+  async deleteAvatar(keycloakSub: string, email?: string): Promise<ProfileResponseDto> {
+    const profile = await this.ensureProfile(keycloakSub, email);
 
     const [updated] = await this.drizzleWrite.db
       .update(profiles)
@@ -249,6 +259,8 @@ export class ProfileService {
       })
       .where(eq(profiles.keycloakSub, keycloakSub))
       .returning();
+
+    if (profile.avatarStoragePath) await this.removeAvatar(profile.avatarStoragePath);
 
     this.logger.log('PROFILE_AVATAR_DELETED');
     return this.toResponseDto(updated);
@@ -346,9 +358,10 @@ export class ProfileService {
    */
   async requestPhoneVerification(
     keycloakSub: string,
-    requestDto: RequestPhoneVerificationDto
+    requestDto: RequestPhoneVerificationDto,
+    email?: string
   ): Promise<{ status: 'PHONE_VERIFICATION_CODE_SENT'; expiresInSeconds: number }> {
-    const profile = await this.getProfileBySub(keycloakSub);
+    const profile = await this.ensureProfile(keycloakSub, email);
     const now = new Date();
 
     if (
@@ -422,8 +435,8 @@ export class ProfileService {
   /**
    * Verify phone number
    */
-  async verifyPhone(keycloakSub: string, verifyDto: VerifyPhoneDto): Promise<ProfileResponseDto> {
-    const profile = await this.getProfileBySub(keycloakSub);
+  async verifyPhone(keycloakSub: string, verifyDto: VerifyPhoneDto, email?: string): Promise<ProfileResponseDto> {
+    const profile = await this.ensureProfile(keycloakSub, email);
 
     if (!profile.phoneVerificationToken) {
       throw new BadRequestException('PHONE_VERIFICATION_NOT_REQUESTED');
@@ -521,6 +534,17 @@ export class ProfileService {
     return 'bezoom-development-phone-verification-secret';
   }
 
+  private async removeAvatar(storagePath: string): Promise<void> {
+    const [bucket, ...keyParts] = storagePath.split('/');
+    const key = keyParts.join('/');
+    if (bucket !== this.objectStorage.avatarBucket || !key) return;
+    try {
+      await this.objectStorage.removeObject(bucket, key);
+    } catch {
+      this.logger.warn('PROFILE_AVATAR_CLEANUP_FAILED');
+    }
+  }
+
   /**
    * Convert database entity to response DTO
    */
@@ -539,6 +563,7 @@ export class ProfileService {
       followersCount: profile.followersCount,
       followingCount: profile.followingCount,
       isPrivate: profile.isPrivate,
+      onboardingCompleted: Boolean(profile.username),
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt
     };

@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { BadRequestException, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import { EventRepository } from '../../../domain/event.repository';
@@ -7,6 +7,7 @@ import { Event } from '../../../domain/event.aggregate';
 import { DomainValidationError } from '../../../domain/events.errors';
 import { CreateEventCommand } from './create-event.command';
 import type { EventResponseDto } from '../../dto/event-response.dto';
+import { EventPublicationPolicy } from '../../policies/event-publication.policy';
 
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
 
@@ -16,10 +17,14 @@ export class CreateEventHandler implements ICommandHandler<CreateEventCommand, E
 
   constructor(
     private readonly eventRepository: EventRepository,
-    private readonly objectStorage: ObjectStorageService
+    private readonly objectStorage: ObjectStorageService,
+    private readonly organizerPolicy: EventPublicationPolicy
   ) {}
 
   async execute(command: CreateEventCommand): Promise<EventResponseDto> {
+    const eligibilityError = await this.organizerPolicy.getEligibilityError(command.organizerKeycloakSub);
+    if (eligibilityError) throw new ConflictException(eligibilityError);
+
     const pendingPhotos = await this.eventRepository.findPendingPhotosByIds(
       command.photoIds,
       command.organizerKeycloakSub

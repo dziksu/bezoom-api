@@ -64,6 +64,13 @@
       "when": 1786726800000,
       "tag": "0008_event_reports_and_user_blocks",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786734000000,
+      "tag": "0009_profile_onboarding_username",
+      "breakpoints": true
     }
   ]
 }
