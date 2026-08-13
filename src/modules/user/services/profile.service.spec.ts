@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { ProfileService } from './profile.service';
+import type { PhoneVerificationMessage } from './phone-verification-delivery';
 
 describe('ProfileService phone verification', () => {
   afterEach(() => jest.restoreAllMocks());
@@ -8,6 +9,7 @@ describe('ProfileService phone verification', () => {
   it('persists only a hash with expiry and never logs the OTP', async () => {
     const profile = {
       keycloakSub: 'user-1',
+      email: 'user@example.com',
       phoneVerificationSentAt: null
     };
     const limit = jest.fn().mockResolvedValueOnce([profile]).mockResolvedValueOnce([]);
@@ -23,11 +25,14 @@ describe('ProfileService phone verification', () => {
       }
     }));
     const log = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    const send = jest.fn<Promise<void>, [PhoneVerificationMessage]>().mockResolvedValue(undefined);
     const service = new ProfileService(
       { db: { update } } as never,
       { db: { select } } as never,
       {} as never,
-      new ConfigService({ PHONE_VERIFICATION_HASH_SECRET: 'test-secret' })
+      new ConfigService({ PHONE_VERIFICATION_HASH_SECRET: 'test-secret' }),
+      { send },
+      {} as never
     );
 
     const result = await service.requestPhoneVerification('user-1', { phoneNumber: '+48123456789' });
@@ -36,6 +41,15 @@ describe('ProfileService phone verification', () => {
     expect(persisted.phoneVerificationToken).toMatch(/^[a-f0-9]{64}$/);
     expect(persisted.phoneVerificationExpiresAt).toBeInstanceOf(Date);
     expect(persisted.phoneVerificationAttempts).toBe(0);
+    expect(send).toHaveBeenCalledTimes(1);
+    const delivered = send.mock.calls[0][0];
+    expect(delivered).toMatchObject({
+      phoneNumber: '+48123456789',
+      recipientEmail: 'user@example.com',
+      expiresInSeconds: 600
+    });
+    expect(delivered.verificationCode).toMatch(/^\d{6}$/);
+    expect(persisted.phoneVerificationToken).not.toBe(delivered.verificationCode);
     expect(log).toHaveBeenCalledWith('PHONE_VERIFICATION_REQUESTED');
     expect(log.mock.calls.flat().join(' ')).not.toMatch(/\b\d{6}\b/);
   });
@@ -63,7 +77,14 @@ describe('ProfileService phone verification', () => {
     const select = jest.fn(() => ({
       from: () => ({ where: () => ({ limit }) })
     }));
-    const service = new ProfileService({} as never, { db: { select } } as never, {} as never, new ConfigService());
+    const service = new ProfileService(
+      {} as never,
+      { db: { select } } as never,
+      {} as never,
+      new ConfigService(),
+      {} as never,
+      { isBlockedBetween: jest.fn().mockResolvedValue(false) } as never
+    );
 
     const result = await service.getProfileById(profile.id);
 

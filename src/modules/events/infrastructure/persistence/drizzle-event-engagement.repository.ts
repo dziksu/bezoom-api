@@ -29,6 +29,7 @@ export class DrizzleEventEngagementRepository extends EventEngagementRepository 
     const rows = await this.db
       .select({
         id: events.id,
+        organizerKeycloakSub: events.organizerKeycloakSub,
         status: events.status,
         visibility: events.visibility,
         verificationStatus: events.verificationStatus,

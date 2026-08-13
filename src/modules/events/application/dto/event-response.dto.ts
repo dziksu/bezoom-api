@@ -76,9 +76,6 @@ export class EventResponseDto {
   status: string;
 
   @ApiProperty()
-  visibility: string;
-
-  @ApiProperty()
   verificationStatus: string;
 
   @ApiProperty({ required: false })
@@ -101,6 +98,9 @@ export class EventLifecycleResponseDto {
   @ApiProperty()
   verificationStatus: string;
 
+  @ApiPropertyOptional()
+  archivedAt?: Date;
+
   @ApiProperty()
   updatedAt: Date;
 }
@@ -117,22 +117,13 @@ export class EventSearchResponseDto {
   @ApiProperty({ type: [EventSearchResultDto] })
   items: EventSearchResultDto[];
 
-  @ApiProperty()
-  page: number;
-
-  @ApiProperty()
-  limit: number;
-
   @ApiProperty({
-    description: 'Whether another page exists. Geo discovery deliberately avoids an exact count on its hot path.'
+    description: 'Whether another batch exists. Geo discovery deliberately avoids an exact count on its hot path.'
   })
   hasMore: boolean;
 
-  @ApiPropertyOptional({
-    deprecated: true,
-    description: 'Deprecated and omitted for geo discovery. Use hasMore instead.'
-  })
-  total?: number;
+  @ApiPropertyOptional({ description: 'Pass this opaque value as cursor to load the next batch.' })
+  nextCursor?: string;
 }
 
 export class EventDetailDto extends EventResponseDto {
@@ -154,30 +145,24 @@ export class AttendingEventDto extends EventResponseDto {
   myRsvpStatus: string;
 }
 
-export class PaginatedEventsDto {
+export class CursorEventsDto {
   @ApiProperty({ type: [EventResponseDto] })
   items: EventResponseDto[];
 
   @ApiProperty()
-  page: number;
+  hasMore: boolean;
 
-  @ApiProperty()
-  limit: number;
-
-  @ApiProperty()
-  total: number;
+  @ApiPropertyOptional()
+  nextCursor?: string;
 }
 
-export class PaginatedAttendingEventsDto {
+export class CursorAttendingEventsDto {
   @ApiProperty({ type: [AttendingEventDto] })
   items: AttendingEventDto[];
 
   @ApiProperty()
-  page: number;
+  hasMore: boolean;
 
-  @ApiProperty()
-  limit: number;
-
-  @ApiProperty()
-  total: number;
+  @ApiPropertyOptional()
+  nextCursor?: string;
 }

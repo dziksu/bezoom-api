@@ -79,16 +79,20 @@ export const events = pgTable(
     verificationStatus: verificationStatusEnum('verification_status').default('UNVERIFIED').notNull(),
     verificationRejectionReason: text('verification_rejection_reason'),
     verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    version: integer('version').default(0).notNull(),
     // Timestamps
-    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, precision: 3 }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull()
   },
   (table) => [
-    index('events_organizer_created_idx').on(table.organizerKeycloakSub, table.createdAt),
+    index('events_organizer_created_idx')
+      .on(table.organizerKeycloakSub, table.createdAt.desc(), table.id.desc())
+      .where(sql`${table.archivedAt} IS NULL`),
     index('events_public_discovery_start_idx')
       .on(table.startDate, table.id)
       .where(
-        sql`${table.status} = 'PUBLISHED' AND ${table.visibility} = 'PUBLIC' AND ${table.verificationStatus} = 'VERIFIED' AND ${table.mediaPipelineStatus} = 'READY'`
+        sql`${table.status} = 'PUBLISHED' AND ${table.visibility} = 'PUBLIC' AND ${table.verificationStatus} = 'VERIFIED' AND ${table.mediaPipelineStatus} = 'READY' AND ${table.archivedAt} IS NULL`
       )
   ]
 );

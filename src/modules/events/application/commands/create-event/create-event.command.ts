@@ -1,4 +1,4 @@
-import type { EventCategory, EventVisibility } from '../../../domain/event.aggregate';
+import type { EventCategory } from '../../../domain/event.aggregate';
 import type { PriceType } from '../../../domain/value-objects/price.vo';
 
 export class CreateEventCommand {
@@ -23,7 +23,6 @@ export class CreateEventCommand {
     public readonly currency?: string,
     public readonly ticketUrl?: string,
     public readonly priceNotes?: string,
-    public readonly amenities?: string[],
-    public readonly visibility?: EventVisibility
+    public readonly amenities?: string[]
   ) {}
 }

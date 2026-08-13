@@ -6,14 +6,21 @@ import {
 } from '../../../domain/engagement/event-engagement.repository';
 import { SetRsvpCommand } from './set-rsvp.command';
 import type { RsvpResponseDto } from '../../dto/engagement.dto';
+import { UserBlockRepository } from '@api/modules/safety/domain/user-block.repository';
 
 @CommandHandler(SetRsvpCommand)
 export class SetRsvpHandler implements ICommandHandler<SetRsvpCommand, RsvpResponseDto> {
-  constructor(private readonly engagementRepository: EventEngagementRepository) {}
+  constructor(
+    private readonly engagementRepository: EventEngagementRepository,
+    private readonly blocks: UserBlockRepository
+  ) {}
 
   async execute(command: SetRsvpCommand): Promise<RsvpResponseDto> {
     const event = await this.engagementRepository.findEventForEngagement(command.eventId);
     if (!event || !isEventAvailableForEngagement(event)) {
+      throw new NotFoundException('EVENT_NOT_FOUND');
+    }
+    if (command.status && (await this.blocks.isBlockedBetween(command.keycloakSub, event.organizerKeycloakSub))) {
       throw new NotFoundException('EVENT_NOT_FOUND');
     }
 

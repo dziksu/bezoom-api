@@ -5,6 +5,7 @@ import { ICurrentUser } from '@api/shared/domain/auth';
 import { mapKeycloakUser } from '../keycloak/keycloak-user.mapper';
 import { KeycloakTokenVerifier } from '../keycloak/keycloak-token.verifier';
 import { PUBLIC_ROUTE } from '../decorators/public.decorator';
+import { OPTIONAL_AUTH_ROUTE } from '../decorators/optional-auth.decorator';
 
 interface AuthenticatedRequest {
   headers?: { authorization?: string | string[] };
@@ -30,6 +31,11 @@ export class AppAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.bearerToken(request.headers?.authorization);
+    const isOptional = this.reflector.getAllAndOverride<boolean>(OPTIONAL_AUTH_ROUTE, [
+      context.getClass(),
+      context.getHandler()
+    ]);
+    if (!token && isOptional) return true;
     if (!token) throw new UnauthorizedException('AUTHENTICATION_REQUIRED');
 
     const payload = await this.tokenVerifier.verify(token);

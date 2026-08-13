@@ -3,11 +3,13 @@ import { NotFoundException } from '@nestjs/common';
 import { SetRsvpHandler } from './set-rsvp.handler';
 import { SetRsvpCommand } from './set-rsvp.command';
 import type { EventEngagementRepository } from '../../../domain/engagement/event-engagement.repository';
+import type { UserBlockRepository } from '@api/modules/safety/domain/user-block.repository';
 
 describe('SetRsvpHandler', () => {
   const buildHandler = (
     snapshot: {
       id: string;
+      organizerKeycloakSub: string;
       status: string;
       visibility: string;
       verificationStatus: string;
@@ -20,12 +22,21 @@ describe('SetRsvpHandler', () => {
       cancelRsvp: jest.fn().mockResolvedValue(undefined),
       getStats: jest.fn().mockResolvedValue({ likesCount: 0, savesCount: 0, attendingCount: 3, commentsCount: 0 })
     };
+    const blocks = { isBlockedBetween: jest.fn().mockResolvedValue(false) };
 
-    return { handler: new SetRsvpHandler(repo as unknown as EventEngagementRepository), repo };
+    return {
+      handler: new SetRsvpHandler(
+        repo as unknown as EventEngagementRepository,
+        blocks as unknown as UserBlockRepository
+      ),
+      repo,
+      blocks
+    };
   };
 
   const published = {
     id: 'e',
+    organizerKeycloakSub: 'organizer-sub',
     status: 'PUBLISHED',
     visibility: 'PUBLIC',
     verificationStatus: 'VERIFIED',

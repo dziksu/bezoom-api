@@ -1,11 +1,14 @@
 import { QueryHandler, IQueryHandler } from '@nestjs/cqrs';
+import { createHash } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
+import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { eventPhotos } from '@api/shared/infrastructure/database/schema';
 import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import { SearchEventsByLocationQuery } from './search-events-by-location.query';
 import type { EventSearchResponseDto } from '../../dto/event-response.dto';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
+import { decodeGeoCursor, encodeGeoCursor } from '@api/shared/domain/cursor-pagination';
 import { MVP_EVENT_REACH_RADIUS_KM } from '../../../domain/event.aggregate';
 
 export const MVP_DISCOVERY_RADIUS_METERS = MVP_EVENT_REACH_RADIUS_KM * 1000;
@@ -27,7 +30,6 @@ interface SearchRow {
   price_notes: string | null;
   amenities: string[] | null;
   status: string;
-  visibility: string;
   verification_status: string;
   created_at: Date;
   latitude: string;
@@ -45,54 +47,79 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
 > {
   constructor(
     private readonly readService: DrizzleReadService,
+    private readonly writeService: DrizzleWriteService,
     private readonly objectStorage: ObjectStorageService,
     private readonly cache: RedisCacheService
   ) {}
 
   async execute(query: SearchEventsByLocationQuery): Promise<EventSearchResponseDto> {
-    const key = [query.lat.toFixed(4), query.lng.toFixed(4), query.week ?? 'all', query.page, query.limit].join(':');
+    // Personalized safety filtering must reflect a new block immediately. Only
+    // the anonymous hot path is shared in Redis.
+    if (query.viewerKeycloakSub) return this.search(query);
+
+    const cursorKey = query.cursor ? createHash('sha256').update(query.cursor).digest('hex') : 'first';
+    const key = [query.lat.toFixed(4), query.lng.toFixed(4), query.week ?? 'all', cursorKey, query.limit].join(':');
     return this.cache.getOrSet('event_search', key, 15, () => this.search(query));
   }
 
   private async search(query: SearchEventsByLocationQuery): Promise<EventSearchResponseDto> {
-    const offset = (query.page - 1) * query.limit;
+    const cursor = decodeGeoCursor(query.cursor, query);
     // One extra row provides hasMore without forcing PostgreSQL to count every
-    // matching event before it can return the first page.
+    // matching event before it can return the first batch.
     const fetchLimit = query.limit + 1;
     const weekIsNull = query.week === undefined;
     const week = query.week ?? 0;
 
-    const result: unknown = await this.readService.db.execute(sql`
+    // Personalized safety filtering runs on the primary to avoid replica lag;
+    // anonymous high-volume discovery stays on the read side.
+    const queryDb = query.viewerKeycloakSub ? this.writeService.db : this.readService.db;
+    const result: unknown = await queryDb.execute(sql`
       WITH params AS (
         SELECT
           ST_SetSRID(ST_MakePoint(${query.lng}, ${query.lat}), 4326)::geography AS origin,
           (date_trunc('week', (now() AT TIME ZONE 'Europe/Warsaw')) + (${week} * interval '7 days')) AS week_start
       )
-      SELECT
-        e.id, e.title, e.description, e.category, e.start_date, e.end_date,
-        organizer.id AS organizer_id, e.price_type, e.price_min, e.price_max, e.currency,
-        e.ticket_url, e.price_notes, e.amenities, e.status, e.visibility,
-        e.verification_status, e.created_at,
-        l.latitude, l.longitude, l.address, l.city, l.country,
-        ST_Distance(l.geog, p.origin) AS distance_m
-      FROM params p
-      JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MVP_DISCOVERY_RADIUS_METERS})
-      JOIN events e ON e.id = l.event_id
-      LEFT JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
-      WHERE e.status = 'PUBLISHED'
-        AND e.verification_status = 'VERIFIED'
-        AND e.visibility = 'PUBLIC'
-        AND e.media_pipeline_status = 'READY'
-        AND e.radius_km = ${MVP_EVENT_REACH_RADIUS_KM}
-        AND e.start_date > now()
-        AND (
-          ${weekIsNull} OR (
-            (e.start_date AT TIME ZONE 'Europe/Warsaw') >= p.week_start
-            AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < p.week_start + interval '7 days'
+      , candidates AS (
+        SELECT
+          e.id, e.title, e.description, e.category, e.start_date, e.end_date,
+          organizer.id AS organizer_id, e.price_type, e.price_min, e.price_max, e.currency,
+          e.ticket_url, e.price_notes, e.amenities, e.status,
+          e.verification_status, e.created_at,
+          l.latitude, l.longitude, l.address, l.city, l.country,
+          ST_Distance(l.geog, p.origin) AS distance_m
+        FROM params p
+        JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MVP_DISCOVERY_RADIUS_METERS})
+        JOIN events e ON e.id = l.event_id
+        LEFT JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
+        WHERE e.status = 'PUBLISHED'
+          AND e.verification_status = 'VERIFIED'
+          AND e.visibility = 'PUBLIC'
+          AND e.media_pipeline_status = 'READY'
+          AND e.radius_km = ${MVP_EVENT_REACH_RADIUS_KM}
+          AND e.archived_at IS NULL
+          AND e.start_date > now()
+          AND (
+            ${query.viewerKeycloakSub ?? null}::text IS NULL
+            OR NOT EXISTS (
+              SELECT 1
+              FROM user_blocks ub
+              WHERE (ub.blocker_keycloak_sub = ${query.viewerKeycloakSub ?? null} AND ub.blocked_keycloak_sub = e.organizer_keycloak_sub)
+                 OR (ub.blocked_keycloak_sub = ${query.viewerKeycloakSub ?? null} AND ub.blocker_keycloak_sub = e.organizer_keycloak_sub)
+            )
           )
-        )
-      ORDER BY distance_m ASC, e.id ASC
-      LIMIT ${fetchLimit} OFFSET ${offset}
+          AND (
+            ${weekIsNull} OR (
+              (e.start_date AT TIME ZONE 'Europe/Warsaw') >= p.week_start
+              AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < p.week_start + interval '7 days'
+            )
+          )
+      )
+      SELECT * FROM candidates
+      WHERE ${cursor?.distanceMeters ?? null}::double precision IS NULL
+         OR distance_m > ${cursor?.distanceMeters ?? null}
+         OR (distance_m = ${cursor?.distanceMeters ?? null} AND id > ${cursor?.id ?? null}::uuid)
+      ORDER BY distance_m ASC, id ASC
+      LIMIT ${fetchLimit}
     `);
 
     const fetchedRows = (result as { rows: SearchRow[] }).rows;
@@ -125,7 +152,6 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
         amenities: row.amenities ?? [],
         photos: [],
         status: row.status,
-        visibility: row.visibility,
         verificationStatus: row.verification_status,
         createdAt: row.created_at,
         distanceKm: Math.round((row.distance_m / 1000) * 10) / 10,
@@ -133,9 +159,17 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           ? this.objectStorage.getPublicUrl(this.objectStorage.mediaBucket, coverPhotos.get(row.id)!)
           : undefined
       })),
-      page: query.page,
-      limit: query.limit,
-      hasMore
+      hasMore,
+      nextCursor:
+        hasMore && rows.length > 0
+          ? encodeGeoCursor({
+              distanceMeters: Number(rows[rows.length - 1].distance_m),
+              id: rows[rows.length - 1].id,
+              lat: query.lat,
+              lng: query.lng,
+              week: query.week ?? null
+            })
+          : undefined
     };
   }
 

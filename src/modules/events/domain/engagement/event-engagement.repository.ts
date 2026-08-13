@@ -2,6 +2,7 @@ import type { RsvpStatus } from './rsvp-status';
 
 export interface EventVisibilitySnapshot {
   id: string;
+  organizerKeycloakSub: string;
   status: string;
   visibility: string;
   verificationStatus: string;

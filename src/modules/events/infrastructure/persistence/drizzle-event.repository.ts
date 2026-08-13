@@ -1,9 +1,15 @@
-import { Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { events, locations, eventPhotos, eventStats, eventOutbox } from '@api/shared/infrastructure/database/schema';
 import { Event } from '../../domain/event.aggregate';
-import { EventRepository, type NewPendingPhoto, type PendingPhoto } from '../../domain/event.repository';
+import {
+  EventRepository,
+  type NewPendingPhoto,
+  type PendingPhoto,
+  type PersistEventChangesOptions,
+  type RevisablePhoto
+} from '../../domain/event.repository';
 import { EventMapper } from './event.mapper';
 
 @Injectable()
@@ -54,7 +60,7 @@ export class DrizzleEventRepository extends EventRepository {
 
   async updateLifecycle(event: Event): Promise<void> {
     await this.writeService.db.transaction(async (tx) => {
-      await tx
+      const updated = await tx
         .update(events)
         .set({
           status: event.status,
@@ -62,9 +68,14 @@ export class DrizzleEventRepository extends EventRepository {
           verificationStatus: event.verificationStatus,
           verificationRejectionReason: event.verificationRejectionReason ?? null,
           verifiedAt: event.verifiedAt ?? null,
+          archivedAt: event.archivedAt ?? null,
+          version: sql`${events.version} + 1`,
           updatedAt: event.updatedAt
         })
-        .where(eq(events.id, event.id));
+        .where(and(eq(events.id, event.id), eq(events.version, event.version)))
+        .returning({ id: events.id });
+
+      if (updated.length === 0) throw new ConflictException('EVENT_CONCURRENT_MODIFICATION');
 
       for (const photo of EventMapper.toPhotoUpdateRows(event)) {
         const { id: photoId, ...update } = photo;
@@ -72,6 +83,82 @@ export class DrizzleEventRepository extends EventRepository {
           .update(eventPhotos)
           .set(update)
           .where(and(eq(eventPhotos.id, photoId), eq(eventPhotos.eventId, event.id)));
+      }
+    });
+  }
+
+  async update(event: Event, options: PersistEventChangesOptions = {}): Promise<void> {
+    await this.writeService.db.transaction(async (tx) => {
+      const updated = await tx
+        .update(events)
+        .set({
+          title: event.title,
+          description: event.description,
+          category: event.category,
+          startDate: event.period.startDate,
+          endDate: event.period.endDate ?? null,
+          priceType: event.price.priceType,
+          priceMin: event.price.priceMin?.toString() ?? null,
+          priceMax: event.price.priceMax?.toString() ?? null,
+          currency: event.price.currency,
+          ticketUrl: event.price.ticketUrl ?? null,
+          priceNotes: event.price.priceNotes ?? null,
+          amenities: event.amenities,
+          status: event.status,
+          mediaPipelineStatus: event.mediaPipelineStatus,
+          visibility: event.visibility,
+          verificationStatus: event.verificationStatus,
+          verificationRejectionReason: event.verificationRejectionReason ?? null,
+          verifiedAt: event.verifiedAt ?? null,
+          archivedAt: event.archivedAt ?? null,
+          version: sql`${events.version} + 1`,
+          updatedAt: event.updatedAt
+        })
+        .where(and(eq(events.id, event.id), eq(events.version, event.version)))
+        .returning({ id: events.id });
+
+      if (updated.length === 0) throw new ConflictException('EVENT_CONCURRENT_MODIFICATION');
+
+      await tx
+        .update(locations)
+        .set({
+          latitude: event.location.coordinates.latitude.toString(),
+          longitude: event.location.coordinates.longitude.toString(),
+          address: event.location.address ?? null,
+          city: event.location.city ?? null,
+          country: event.location.country
+        })
+        .where(eq(locations.eventId, event.id));
+
+      if (options.removedPhotoIds?.length) {
+        await tx
+          .delete(eventPhotos)
+          .where(and(eq(eventPhotos.eventId, event.id), inArray(eventPhotos.id, options.removedPhotoIds)));
+      }
+
+      for (const photo of EventMapper.toPhotoUpdateRows(event)) {
+        const { id: photoId, ...photoUpdate } = photo;
+        const linked = await tx
+          .update(eventPhotos)
+          .set({ ...photoUpdate, updatedAt: new Date() })
+          .where(
+            and(
+              eq(eventPhotos.id, photoId),
+              eq(eventPhotos.ownerKeycloakSub, event.organizerKeycloakSub),
+              sql`(${eventPhotos.eventId} IS NULL OR ${eventPhotos.eventId} = ${event.id})`
+            )
+          )
+          .returning({ id: eventPhotos.id });
+
+        if (linked.length === 0) throw new ConflictException('EVENT_PHOTO_STATE_CHANGED');
+      }
+
+      if (options.enqueueReview) {
+        await tx.insert(eventOutbox).values({
+          aggregateId: event.id,
+          eventType: 'event.review.requested',
+          payload: { eventId: event.id }
+        });
       }
     });
   }
@@ -97,6 +184,30 @@ export class DrizzleEventRepository extends EventRepository {
       );
 
     return rows;
+  }
+
+  async findPhotosForRevision(ids: string[], ownerSub: string, eventId: string): Promise<RevisablePhoto[]> {
+    if (ids.length === 0) return [];
+
+    return this.writeService.db
+      .select({
+        id: eventPhotos.id,
+        ownerKeycloakSub: eventPhotos.ownerKeycloakSub,
+        rawKey: eventPhotos.rawKey,
+        mimeType: eventPhotos.mimeType,
+        eventId: eventPhotos.eventId,
+        mediaKey: eventPhotos.mediaKey,
+        status: eventPhotos.status,
+        sizeBytes: eventPhotos.sizeBytes
+      })
+      .from(eventPhotos)
+      .where(
+        and(
+          inArray(eventPhotos.id, ids),
+          eq(eventPhotos.ownerKeycloakSub, ownerSub),
+          sql`(${eventPhotos.eventId} IS NULL OR ${eventPhotos.eventId} = ${eventId})`
+        )
+      );
   }
 
   async createPendingPhotos(photos: NewPendingPhoto[]): Promise<void> {

@@ -48,7 +48,7 @@ export class EventPipelineOutboxDispatcher implements OnApplicationBootstrap, On
         SELECT id, aggregate_id
         FROM event_outbox
         WHERE processed_at IS NULL
-          AND event_type = 'event.created'
+          AND event_type IN ('event.created', 'event.review.requested')
         ORDER BY occurred_at, id
         FOR UPDATE SKIP LOCKED
         LIMIT ${safeLimit}

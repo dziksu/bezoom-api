@@ -3,6 +3,9 @@ import { UserController } from './user.controller';
 import { ProfileService } from './services/profile.service';
 import { DrizzleModule } from '../../shared/infrastructure/drizzle.module';
 import { StorageModule } from '../../shared/infrastructure/storage/storage.module';
+import { PhoneVerificationDelivery } from './services/phone-verification-delivery';
+import { DevelopmentEmailPhoneVerificationDelivery } from './infrastructure/development-email-phone-verification.delivery';
+import { SafetyModule } from '../safety/safety.module';
 
 /**
  * UserModule
@@ -13,9 +16,13 @@ import { StorageModule } from '../../shared/infrastructure/storage/storage.modul
  * - Phone verification
  */
 @Module({
-  imports: [DrizzleModule, StorageModule],
+  imports: [DrizzleModule, StorageModule, SafetyModule],
   controllers: [UserController],
-  providers: [ProfileService],
+  providers: [
+    ProfileService,
+    DevelopmentEmailPhoneVerificationDelivery,
+    { provide: PhoneVerificationDelivery, useExisting: DevelopmentEmailPhoneVerificationDelivery }
+  ],
   exports: [ProfileService]
 })
 export class UserModule {}

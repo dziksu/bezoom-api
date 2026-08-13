@@ -53,6 +53,8 @@ export class EventMapper {
       verificationStatus: event.verificationStatus,
       verificationRejectionReason: event.verificationRejectionReason ?? undefined,
       verifiedAt: event.verifiedAt ?? undefined,
+      archivedAt: event.archivedAt ?? undefined,
+      version: event.version,
       createdAt: event.createdAt,
       updatedAt: event.updatedAt
     };
@@ -83,6 +85,8 @@ export class EventMapper {
       verificationStatus: event.verificationStatus,
       verificationRejectionReason: event.verificationRejectionReason,
       verifiedAt: event.verifiedAt,
+      archivedAt: event.archivedAt,
+      version: event.version,
       createdAt: event.createdAt,
       updatedAt: event.updatedAt
     };

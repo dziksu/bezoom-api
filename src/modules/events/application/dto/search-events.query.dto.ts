@@ -1,8 +1,7 @@
 import { Type } from 'class-transformer';
-import { IsLatitude, IsLongitude, Min, Max, IsOptional, IsInt } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsLatitude, IsLongitude, Min, Max, IsOptional, IsInt, IsString, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-export const GEO_SEARCH_MAX_PAGE = 100;
 export const GEO_SEARCH_MAX_LIMIT = 50;
 
 export class SearchEventsQueryDto {
@@ -28,13 +27,11 @@ export class SearchEventsQueryDto {
   @Max(52)
   week?: number;
 
-  @ApiProperty({ required: false, default: 1 })
+  @ApiPropertyOptional({ description: 'Opaque cursor returned as nextCursor by the previous response.' })
   @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(GEO_SEARCH_MAX_PAGE)
-  page?: number = 1;
+  @IsString()
+  @MaxLength(1024)
+  cursor?: string;
 
   @ApiProperty({ required: false, default: 20 })
   @IsOptional()

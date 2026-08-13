@@ -71,6 +71,10 @@ services:
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
       EVENT_PIPELINE_MODE: development_passthrough
       EVENT_PIPELINE_DISPATCH_INTERVAL_MS: 500
+      PHONE_VERIFICATION_DELIVERY_MODE: development_email
+      DEV_SMS_SMTP_HOST: mailpit
+      DEV_SMS_SMTP_PORT: 1025
+      DEV_SMS_FROM_EMAIL: sms@bezoom.local
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/bezoom/protocol/openid-connect/certs
       KEYCLOAK_ISSUER: http://localhost:${KEYCLOAK_HTTP_PORT:-8080}/realms/bezoom
       KEYCLOAK_CLIENT_ID: bezoom-api
@@ -87,6 +91,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/api/health/ready >/dev/null || exit 1']
       interval: 10s

@@ -9,10 +9,10 @@ export const eventSaves = pgTable(
       .notNull()
       .references(() => events.id, { onDelete: 'cascade' }),
     keycloakSub: text('keycloak_sub').notNull(),
-    savedAt: timestamp('saved_at', { withTimezone: true }).defaultNow().notNull()
+    savedAt: timestamp('saved_at', { withTimezone: true, precision: 3 }).defaultNow().notNull()
   },
   (t) => [
     uniqueIndex('event_saves_event_keycloak_sub_idx').on(t.eventId, t.keycloakSub),
-    index('event_saves_user_saved_idx').on(t.keycloakSub, t.savedAt)
+    index('event_saves_user_saved_idx').on(t.keycloakSub, t.savedAt.desc(), t.id.desc())
   ]
 );

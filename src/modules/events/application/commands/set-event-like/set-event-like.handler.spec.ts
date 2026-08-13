@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { SetEventLikeHandler } from './set-event-like.handler';
 import { SetEventLikeCommand } from './set-event-like.command';
 import type { EventEngagementRepository } from '../../../domain/engagement/event-engagement.repository';
+import type { UserBlockRepository } from '@api/modules/safety/domain/user-block.repository';
 
 describe('SetEventLikeHandler', () => {
   const buildHandler = (eventExists: boolean) => {
@@ -11,6 +12,7 @@ describe('SetEventLikeHandler', () => {
         eventExists
           ? {
               id: 'e',
+              organizerKeycloakSub: 'organizer-sub',
               status: 'PUBLISHED',
               visibility: 'PUBLIC',
               verificationStatus: 'VERIFIED',
@@ -21,8 +23,16 @@ describe('SetEventLikeHandler', () => {
       setLike: jest.fn().mockResolvedValue(undefined),
       getStats: jest.fn().mockResolvedValue({ likesCount: 5, savesCount: 0, attendingCount: 0, commentsCount: 0 })
     };
+    const blocks = { isBlockedBetween: jest.fn().mockResolvedValue(false) };
 
-    return { handler: new SetEventLikeHandler(repo as unknown as EventEngagementRepository), repo };
+    return {
+      handler: new SetEventLikeHandler(
+        repo as unknown as EventEngagementRepository,
+        blocks as unknown as UserBlockRepository
+      ),
+      repo,
+      blocks
+    };
   };
 
   it('likes an existing event and returns the updated count', async () => {
@@ -58,6 +68,7 @@ describe('SetEventLikeHandler', () => {
     const { handler, repo } = buildHandler(true);
     repo.findEventForEngagement.mockResolvedValue({
       id: 'e',
+      organizerKeycloakSub: 'organizer-sub',
       status: 'UPLOADED',
       visibility: 'PUBLIC',
       verificationStatus: 'UNVERIFIED',
@@ -68,5 +79,18 @@ describe('SetEventLikeHandler', () => {
       'EVENT_NOT_FOUND'
     );
     expect(repo.setLike).not.toHaveBeenCalled();
+  });
+
+  it('masks blocked organizers but still allows removing an existing like', async () => {
+    const { handler, repo, blocks } = buildHandler(true);
+    blocks.isBlockedBetween.mockResolvedValue(true);
+
+    await expect(handler.execute(new SetEventLikeCommand(randomUUID(), 'sub-1', true))).rejects.toThrow(
+      'EVENT_NOT_FOUND'
+    );
+    await expect(handler.execute(new SetEventLikeCommand(randomUUID(), 'sub-1', false))).resolves.toMatchObject({
+      liked: false
+    });
+    expect(repo.setLike).toHaveBeenCalledTimes(1);
   });
 });

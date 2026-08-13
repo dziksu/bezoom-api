@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { Event, type CreateEventInput } from './event.aggregate';
+import { Event, type CreateEventInput, type ReviseEventInput } from './event.aggregate';
 import { DomainValidationError } from './events.errors';
 import { EventCreatedDomainEvent } from './events/event-created.domain-event';
 
@@ -22,6 +22,17 @@ describe('Event aggregate', () => {
     photos: onePhoto()
   });
 
+  const revision = (event: Event): ReviseEventInput => ({
+    title: 'Revised Summer Jazz Night',
+    description: `${longDescription} Revised.`,
+    category: event.category,
+    startDate: future(2),
+    location: { latitude: 50.0647, longitude: 19.945 },
+    price: { priceType: 'FREE' },
+    amenities: ['ACCESSIBLE'],
+    photos: event.photos
+  });
+
   it('creates an uploaded event awaiting moderation with system reach', () => {
     const event = Event.create(baseInput(), randomUUID());
 
@@ -30,6 +41,7 @@ describe('Event aggregate', () => {
     expect(event.verificationStatus).toBe('UNVERIFIED');
     expect(event.verifiedAt).toBeUndefined();
     expect(event.radiusKm).toBe(5);
+    expect(event.visibility).toBe('PUBLIC');
   });
 
   it('raises exactly one EventCreatedDomainEvent', () => {
@@ -149,5 +161,63 @@ describe('Event aggregate', () => {
 
     expect(event.photos.map((p) => p.position)).toEqual([0, 1]);
     expect(event.photos.map((p) => p.id)).toEqual(photos.map((p) => p.id));
+  });
+
+  it('moves a published event back to a clean draft when revised', () => {
+    const event = Event.create(baseInput(), randomUUID());
+    event.verify();
+    event.markPhotoReady(event.photos[0].id, `events/${event.id}/cover.jpg`);
+    event.markReady();
+    event.publish();
+
+    event.revise(revision(event));
+
+    expect(event.status).toBe('DRAFT');
+    expect(event.mediaPipelineStatus).toBe('UPLOADED');
+    expect(event.verificationStatus).toBe('UNVERIFIED');
+    expect(event.verificationRejectionReason).toBeUndefined();
+    expect(event.title).toBe('Revised Summer Jazz Night');
+  });
+
+  it('allows a rejected event to be revised and resubmitted for a fresh review', () => {
+    const event = Event.create(baseInput(), randomUUID());
+    event.reject('EVENT_MODERATION_REJECTED');
+
+    event.revise(revision(event));
+    event.resubmit();
+
+    expect(event.status).toBe('UPLOADED');
+    expect(event.verificationStatus).toBe('UNVERIFIED');
+    expect(event.verificationRejectionReason).toBeUndefined();
+  });
+
+  it('requires a rejected event to be revised before resubmission', () => {
+    const event = Event.create(baseInput(), randomUUID());
+    event.reject('EVENT_MODERATION_REJECTED');
+
+    expect(() => event.resubmit()).toThrow('EVENT_NOT_RESUBMITTABLE');
+  });
+
+  it('cancels an event while preserving it for owner history', () => {
+    const event = Event.create(baseInput(), randomUUID());
+
+    event.cancel();
+
+    expect(event.status).toBe('CANCELLED');
+    expect(event.archivedAt).toBeUndefined();
+    expect(() => event.cancel()).toThrow('EVENT_ALREADY_CANCELLED');
+  });
+
+  it('archives an event idempotently and prevents later edits', () => {
+    const event = Event.create(baseInput(), randomUUID());
+
+    event.archive();
+    const archivedAt = event.archivedAt;
+    event.archive();
+
+    expect(event.status).toBe('CANCELLED');
+    expect(event.archivedAt).toBe(archivedAt);
+    expect(() => event.revise(revision(event))).toThrow('EVENT_ARCHIVED');
+    expect(() => event.resubmit()).toThrow('EVENT_ARCHIVED');
   });
 });

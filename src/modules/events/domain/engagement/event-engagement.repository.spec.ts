@@ -3,6 +3,7 @@ import { isEventAvailableForEngagement, type EventVisibilitySnapshot } from './e
 describe('isEventAvailableForEngagement', () => {
   const available: EventVisibilitySnapshot = {
     id: 'event-id',
+    organizerKeycloakSub: 'organizer-sub',
     status: 'PUBLISHED',
     visibility: 'PUBLIC',
     verificationStatus: 'VERIFIED',

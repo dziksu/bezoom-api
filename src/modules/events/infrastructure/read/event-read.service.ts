@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { and, count, desc, eq, inArray, ne, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 import { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
+import { decodeTimestampCursor, encodeTimestampCursor } from '@api/shared/domain/cursor-pagination';
 import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import {
   events,
@@ -10,7 +11,8 @@ import {
   eventSaves,
   eventParticipants,
   eventStats,
-  profiles
+  profiles,
+  userBlocks
 } from '@api/shared/infrastructure/database/schema';
 import type {
   EventResponseDto,
@@ -22,9 +24,10 @@ import type {
 type EventRow = typeof events.$inferSelect;
 type LocationRow = typeof locations.$inferSelect;
 
-export interface Paginated<T> {
+export interface CursorPage<T> {
   items: T[];
-  total: number;
+  hasMore: boolean;
+  nextCursor?: string;
 }
 
 /**
@@ -43,7 +46,7 @@ export class EventReadService {
     return this.readService.db;
   }
 
-  async findDetailById(id: string): Promise<EventDetailDto | null> {
+  async findDetailById(id: string, viewerKeycloakSub?: string): Promise<EventDetailDto | null> {
     const rows = await this.db
       .select({ event: events, location: locations, stats: eventStats })
       .from(events)
@@ -55,7 +58,15 @@ export class EventReadService {
           eq(events.status, 'PUBLISHED'),
           eq(events.mediaPipelineStatus, 'READY'),
           eq(events.verificationStatus, 'VERIFIED'),
-          eq(events.visibility, 'PUBLIC')
+          eq(events.visibility, 'PUBLIC'),
+          isNull(events.archivedAt),
+          viewerKeycloakSub
+            ? sql`NOT EXISTS (
+                SELECT 1 FROM ${userBlocks} block
+                WHERE (block.blocker_keycloak_sub = ${viewerKeycloakSub} AND block.blocked_keycloak_sub = ${events.organizerKeycloakSub})
+                   OR (block.blocked_keycloak_sub = ${viewerKeycloakSub} AND block.blocker_keycloak_sub = ${events.organizerKeycloakSub})
+              )`
+            : undefined
         )
       )
       .limit(1);
@@ -78,93 +89,142 @@ export class EventReadService {
     };
   }
 
-  async listByOrganizer(sub: string, page: number, limit: number): Promise<Paginated<EventResponseDto>> {
-    const where = eq(events.organizerKeycloakSub, sub);
-    return this.listWithLocation(where, [desc(events.createdAt)], page, limit);
-  }
-
-  async listLiked(sub: string, page: number, limit: number): Promise<Paginated<EventResponseDto>> {
-    const offset = (page - 1) * limit;
-
-    const [rows, [totalRow]] = await Promise.all([
-      this.db
-        .select({ event: events, location: locations })
-        .from(eventLikes)
-        .innerJoin(events, eq(events.id, eventLikes.eventId))
-        .innerJoin(locations, eq(locations.eventId, events.id))
-        .where(and(eq(eventLikes.keycloakSub, sub), this.publiclyAvailable()))
-        .orderBy(desc(eventLikes.createdAt))
-        .limit(limit)
-        .offset(offset),
-      this.db
-        .select({ value: count() })
-        .from(eventLikes)
-        .innerJoin(events, eq(events.id, eventLikes.eventId))
-        .where(and(eq(eventLikes.keycloakSub, sub), this.publiclyAvailable()))
-    ]);
-
-    return this.assembleList(rows, totalRow?.value ?? 0);
-  }
-
-  async listSaved(sub: string, page: number, limit: number): Promise<Paginated<EventResponseDto>> {
-    const offset = (page - 1) * limit;
-
-    const [rows, [totalRow]] = await Promise.all([
-      this.db
-        .select({ event: events, location: locations })
-        .from(eventSaves)
-        .innerJoin(events, eq(events.id, eventSaves.eventId))
-        .innerJoin(locations, eq(locations.eventId, events.id))
-        .where(and(eq(eventSaves.keycloakSub, sub), this.publiclyAvailable()))
-        .orderBy(desc(eventSaves.savedAt))
-        .limit(limit)
-        .offset(offset),
-      this.db
-        .select({ value: count() })
-        .from(eventSaves)
-        .innerJoin(events, eq(events.id, eventSaves.eventId))
-        .where(and(eq(eventSaves.keycloakSub, sub), this.publiclyAvailable()))
-    ]);
-
-    return this.assembleList(rows, totalRow?.value ?? 0);
-  }
-
-  async listAttending(sub: string, page: number, limit: number): Promise<Paginated<AttendingEventDto>> {
-    const offset = (page - 1) * limit;
-
-    const [rows, [totalRow]] = await Promise.all([
-      this.db
-        .select({ event: events, location: locations, myRsvpStatus: eventParticipants.status })
-        .from(eventParticipants)
-        .innerJoin(events, eq(events.id, eventParticipants.eventId))
-        .innerJoin(locations, eq(locations.eventId, events.id))
-        .where(
-          and(
-            eq(eventParticipants.keycloakSub, sub),
-            ne(eventParticipants.status, 'DECLINED'),
-            this.publiclyAvailable()
-          )
+  async listByOrganizer(
+    sub: string,
+    cursorValue: string | undefined,
+    limit: number
+  ): Promise<CursorPage<EventResponseDto>> {
+    const cursor = decodeTimestampCursor(cursorValue, 'my_created_events');
+    const rows = await this.db
+      .select({
+        event: events,
+        location: locations,
+        cursorAt: events.createdAt,
+        cursorId: events.id
+      })
+      .from(events)
+      .innerJoin(locations, eq(locations.eventId, events.id))
+      .where(
+        and(
+          eq(events.organizerKeycloakSub, sub),
+          isNull(events.archivedAt),
+          cursor
+            ? or(
+                lt(events.createdAt, cursor.timestamp),
+                and(eq(events.createdAt, cursor.timestamp), lt(events.id, cursor.id))
+              )
+            : undefined
         )
-        .orderBy(desc(events.startDate))
-        .limit(limit)
-        .offset(offset),
-      this.db
-        .select({ value: count() })
-        .from(eventParticipants)
-        .innerJoin(events, eq(events.id, eventParticipants.eventId))
-        .where(
-          and(
-            eq(eventParticipants.keycloakSub, sub),
-            ne(eventParticipants.status, 'DECLINED'),
-            this.publiclyAvailable()
-          )
-        )
-    ]);
+      )
+      .orderBy(desc(events.createdAt), desc(events.id))
+      .limit(limit + 1);
 
-    const photos = await this.fetchPhotos(rows.map((r) => r.event.id));
-    const organizerIds = await this.fetchOrganizerIds(rows.map((r) => r.event.organizerKeycloakSub));
+    return this.assembleCursorPage(rows, limit, 'my_created_events');
+  }
+
+  async listLiked(sub: string, cursorValue: string | undefined, limit: number): Promise<CursorPage<EventResponseDto>> {
+    const cursor = decodeTimestampCursor(cursorValue, 'my_liked_events');
+    const rows = await this.db
+      .select({
+        event: events,
+        location: locations,
+        cursorAt: eventLikes.createdAt,
+        cursorId: eventLikes.id
+      })
+      .from(eventLikes)
+      .innerJoin(events, eq(events.id, eventLikes.eventId))
+      .innerJoin(locations, eq(locations.eventId, events.id))
+      .where(
+        and(
+          eq(eventLikes.keycloakSub, sub),
+          this.publiclyAvailable(),
+          this.notBlocked(sub),
+          cursor
+            ? or(
+                lt(eventLikes.createdAt, cursor.timestamp),
+                and(eq(eventLikes.createdAt, cursor.timestamp), lt(eventLikes.id, cursor.id))
+              )
+            : undefined
+        )
+      )
+      .orderBy(desc(eventLikes.createdAt), desc(eventLikes.id))
+      .limit(limit + 1);
+
+    return this.assembleCursorPage(rows, limit, 'my_liked_events');
+  }
+
+  async listSaved(sub: string, cursorValue: string | undefined, limit: number): Promise<CursorPage<EventResponseDto>> {
+    const cursor = decodeTimestampCursor(cursorValue, 'my_saved_events');
+    const rows = await this.db
+      .select({
+        event: events,
+        location: locations,
+        cursorAt: eventSaves.savedAt,
+        cursorId: eventSaves.id
+      })
+      .from(eventSaves)
+      .innerJoin(events, eq(events.id, eventSaves.eventId))
+      .innerJoin(locations, eq(locations.eventId, events.id))
+      .where(
+        and(
+          eq(eventSaves.keycloakSub, sub),
+          this.publiclyAvailable(),
+          this.notBlocked(sub),
+          cursor
+            ? or(
+                lt(eventSaves.savedAt, cursor.timestamp),
+                and(eq(eventSaves.savedAt, cursor.timestamp), lt(eventSaves.id, cursor.id))
+              )
+            : undefined
+        )
+      )
+      .orderBy(desc(eventSaves.savedAt), desc(eventSaves.id))
+      .limit(limit + 1);
+
+    return this.assembleCursorPage(rows, limit, 'my_saved_events');
+  }
+
+  async listAttending(
+    sub: string,
+    cursorValue: string | undefined,
+    limit: number
+  ): Promise<CursorPage<AttendingEventDto>> {
+    const cursor = decodeTimestampCursor(cursorValue, 'my_attending_events');
+    const rows = await this.db
+      .select({
+        event: events,
+        location: locations,
+        myRsvpStatus: eventParticipants.status,
+        cursorAt: eventParticipants.joinedAt,
+        cursorId: eventParticipants.id
+      })
+      .from(eventParticipants)
+      .innerJoin(events, eq(events.id, eventParticipants.eventId))
+      .innerJoin(locations, eq(locations.eventId, events.id))
+      .where(
+        and(
+          eq(eventParticipants.keycloakSub, sub),
+          ne(eventParticipants.status, 'DECLINED'),
+          this.publiclyAvailable(),
+          this.notBlocked(sub),
+          cursor
+            ? or(
+                lt(eventParticipants.joinedAt, cursor.timestamp),
+                and(eq(eventParticipants.joinedAt, cursor.timestamp), lt(eventParticipants.id, cursor.id))
+              )
+            : undefined
+        )
+      )
+      .orderBy(desc(eventParticipants.joinedAt), desc(eventParticipants.id))
+      .limit(limit + 1);
+
+    const hasMore = rows.length > limit;
+    const pageRows = rows.slice(0, limit);
+    const photos = await this.fetchPhotos(pageRows.map((r) => r.event.id));
+    const organizerIds = await this.fetchOrganizerIds(pageRows.map((r) => r.event.organizerKeycloakSub));
+    const last = pageRows[pageRows.length - 1];
     return {
-      items: rows.map((r) => ({
+      items: pageRows.map((r) => ({
         ...this.mapRow(
           r.event,
           r.location,
@@ -173,44 +233,33 @@ export class EventReadService {
         ),
         myRsvpStatus: r.myRsvpStatus
       })),
-      total: totalRow?.value ?? 0
+      hasMore,
+      nextCursor:
+        hasMore && last ? encodeTimestampCursor('my_attending_events', last.cursorAt, last.cursorId) : undefined
     };
   }
 
-  private async listWithLocation(
-    where: SQL<unknown> | undefined,
-    orderBy: Array<ReturnType<typeof desc>>,
-    page: number,
-    limit: number
-  ): Promise<Paginated<EventResponseDto>> {
-    const offset = (page - 1) * limit;
-
-    const [rows, [totalRow]] = await Promise.all([
-      this.db
-        .select({ event: events, location: locations })
-        .from(events)
-        .innerJoin(locations, eq(locations.eventId, events.id))
-        .where(where)
-        .orderBy(...orderBy)
-        .limit(limit)
-        .offset(offset),
-      this.db.select({ value: count() }).from(events).where(where)
-    ]);
-
-    return this.assembleList(rows, totalRow?.value ?? 0);
-  }
-
-  private async assembleList(
-    rows: Array<{ event: EventRow; location: LocationRow }>,
-    total: number
-  ): Promise<Paginated<EventResponseDto>> {
-    const photos = await this.fetchPhotos(rows.map((r) => r.event.id));
-    const organizerIds = await this.fetchOrganizerIds(rows.map((r) => r.event.organizerKeycloakSub));
+  private async assembleCursorPage(
+    rows: Array<{
+      event: EventRow;
+      location: LocationRow;
+      cursorAt: Date;
+      cursorId: string;
+    }>,
+    limit: number,
+    cursorKind: string
+  ): Promise<CursorPage<EventResponseDto>> {
+    const hasMore = rows.length > limit;
+    const pageRows = rows.slice(0, limit);
+    const photos = await this.fetchPhotos(pageRows.map((r) => r.event.id));
+    const organizerIds = await this.fetchOrganizerIds(pageRows.map((r) => r.event.organizerKeycloakSub));
+    const last = pageRows[pageRows.length - 1];
     return {
-      items: rows.map((r) =>
+      items: pageRows.map((r) =>
         this.mapRow(r.event, r.location, photos.get(r.event.id) ?? [], organizerIds.get(r.event.organizerKeycloakSub))
       ),
-      total
+      hasMore,
+      nextCursor: hasMore && last ? encodeTimestampCursor(cursorKind, last.cursorAt, last.cursorId) : undefined
     };
   }
 
@@ -260,8 +309,17 @@ export class EventReadService {
       eq(events.status, 'PUBLISHED'),
       eq(events.mediaPipelineStatus, 'READY'),
       eq(events.verificationStatus, 'VERIFIED'),
-      eq(events.visibility, 'PUBLIC')
+      eq(events.visibility, 'PUBLIC'),
+      isNull(events.archivedAt)
     );
+  }
+
+  private notBlocked(viewerKeycloakSub: string): SQL {
+    return sql`NOT EXISTS (
+      SELECT 1 FROM ${userBlocks} ub
+      WHERE (ub.blocker_keycloak_sub = ${viewerKeycloakSub} AND ub.blocked_keycloak_sub = ${events.organizerKeycloakSub})
+         OR (ub.blocked_keycloak_sub = ${viewerKeycloakSub} AND ub.blocker_keycloak_sub = ${events.organizerKeycloakSub})
+    )`;
   }
 
   private mapRow(
@@ -292,7 +350,6 @@ export class EventReadService {
       amenities: event.amenities ?? [],
       photos,
       status: event.status,
-      visibility: event.visibility,
       verificationStatus: event.verificationStatus,
       verificationRejectionReason: event.verificationRejectionReason ?? undefined,
       createdAt: event.createdAt

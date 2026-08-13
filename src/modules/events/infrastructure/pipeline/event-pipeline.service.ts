@@ -26,8 +26,7 @@ export class EventPipelineService {
     this.assertDevelopmentMode();
 
     const event = await this.repository.findById(eventId);
-    if (!event || event.status === 'REJECTED' || event.status === 'CANCELLED') return;
-    if (event.status === 'READY' || event.status === 'PUBLISHED') return;
+    if (!event || event.archivedAt || event.status !== 'UPLOADED') return;
 
     for (const photo of event.photos) {
       if (photo.status === 'READY' && photo.mediaKey) continue;

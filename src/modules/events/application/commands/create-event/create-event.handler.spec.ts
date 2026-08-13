@@ -61,6 +61,7 @@ describe('CreateEventHandler', () => {
     expect(result.status).toBe('UPLOADED');
     expect(result.verificationStatus).toBe('UNVERIFIED');
     expect(result.photos).toEqual([]);
+    expect(result).not.toHaveProperty('visibility');
     expect(eventRepository.save).toHaveBeenCalledTimes(1);
     expect(objectStorage.copyObject).not.toHaveBeenCalled();
   });

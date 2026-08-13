@@ -43,6 +43,27 @@
       "when": 1786636800000,
       "tag": "0005_event_lifecycle_and_stats",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786705200000,
+      "tag": "0006_event_owner_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786712400000,
+      "tag": "0007_comments_and_cursor_indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786726800000,
+      "tag": "0008_event_reports_and_user_blocks",
+      "breakpoints": true
     }
   ]
 }

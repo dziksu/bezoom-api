@@ -1,7 +1,7 @@
 export class ListMySavedEventsQuery {
   constructor(
     public readonly keycloakSub: string,
-    public readonly page: number,
+    public readonly cursor: string | undefined,
     public readonly limit: number
   ) {}
 }

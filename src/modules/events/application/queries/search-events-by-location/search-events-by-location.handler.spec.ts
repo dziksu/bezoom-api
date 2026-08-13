@@ -1,6 +1,7 @@
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import type { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
+import type { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import type { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import type { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
 import { MVP_DISCOVERY_RADIUS_METERS, SearchEventsByLocationHandler } from './search-events-by-location.handler';
@@ -22,7 +23,6 @@ const searchRow = (id: string) => ({
   price_notes: null,
   amenities: [],
   status: 'PUBLISHED',
-  visibility: 'PUBLIC',
   verification_status: 'VERIFIED',
   created_at: new Date('2026-08-01T10:00:00.000Z'),
   latitude: '50.0647000',
@@ -45,6 +45,7 @@ describe('SearchEventsByLocationHandler', () => {
   const photoFrom = jest.fn().mockReturnValue({ where: photoWhere });
   const selectDistinctOn = jest.fn().mockReturnValue({ from: photoFrom });
   const readService = { db: { execute, selectDistinctOn } } as unknown as DrizzleReadService;
+  const writeService = { db: { execute } } as unknown as DrizzleWriteService;
   const objectStorage = {
     mediaBucket: 'bezoom-media',
     getPublicUrl: jest.fn((bucket: string, key: string) => `${bucket}/${key}`)
@@ -53,7 +54,7 @@ describe('SearchEventsByLocationHandler', () => {
     loader()
   );
   const cache = { getOrSet } as unknown as RedisCacheService;
-  const handler = new SearchEventsByLocationHandler(readService, objectStorage, cache);
+  const handler = new SearchEventsByLocationHandler(readService, writeService, objectStorage, cache);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -63,7 +64,7 @@ describe('SearchEventsByLocationHandler', () => {
   });
 
   it('uses an indexable constant-radius ST_DWithin and avoids an exact count', async () => {
-    await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, undefined, 1, 20));
+    await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, undefined, undefined, 20));
 
     if (!capturedStatement) throw new Error('SEARCH_SQL_NOT_CAPTURED');
     const compiled = new PgDialect().sqlToQuery(capturedStatement);
@@ -72,30 +73,33 @@ describe('SearchEventsByLocationHandler', () => {
     expect(normalizedSql).toContain('join locations l on st_dwithin(l.geog, p.origin,');
     expect(normalizedSql).toContain('and e.start_date > now()');
     expect(normalizedSql).toContain('and e.radius_km =');
+    expect(normalizedSql).toContain('and e.archived_at is null');
     expect(normalizedSql).not.toContain('count(*) over');
     expect(compiled.params).toContain(MVP_DISCOVERY_RADIUS_METERS);
     expect(compiled.params).toContain(21);
   });
 
-  it('fetches one extra row, trims it and exposes hasMore without total', async () => {
+  it('fetches one extra row, trims it and exposes a next cursor', async () => {
     executeRows = [searchRow('one'), searchRow('two'), searchRow('three')];
 
-    const result = await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, 0, 1, 2));
+    const result = await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, 0, undefined, 2));
 
     expect(result.items.map((event) => event.id)).toEqual(['one', 'two']);
     expect(result.items[0]).toMatchObject({ organizerId: 'cd7ee731-259a-46d8-93ea-5580753b3637' });
     expect(result.items[0]).not.toHaveProperty('organizerKeycloakSub');
+    expect(result.items[0]).not.toHaveProperty('visibility');
     expect(result.hasMore).toBe(true);
-    expect(result.total).toBeUndefined();
+    expect(result.nextCursor).toEqual(expect.any(String));
     expect(getOrSet).toHaveBeenCalledWith('event_search', expect.any(String), 15, expect.any(Function));
   });
 
-  it('returns hasMore false for the last page', async () => {
+  it('returns hasMore false for the last batch', async () => {
     executeRows = [searchRow('only')];
 
-    const result = await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, undefined, 1, 20));
+    const result = await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, undefined, undefined, 20));
 
     expect(result.items).toHaveLength(1);
     expect(result.hasMore).toBe(false);
+    expect(result.nextCursor).toBeUndefined();
   });
 });

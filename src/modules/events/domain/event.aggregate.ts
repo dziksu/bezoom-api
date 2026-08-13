@@ -49,8 +49,19 @@ export interface CreateEventInput {
   location: EventLocationInput;
   price: PriceInput;
   amenities?: string[];
-  visibility?: EventVisibility;
   photos: Array<{ id: string; rawKey: string; mimeType: string; sizeBytes: number }>;
+}
+
+export interface ReviseEventInput {
+  title: string;
+  description: string;
+  category: EventCategory;
+  startDate: Date;
+  endDate?: Date;
+  location: EventLocationInput;
+  price: PriceInput;
+  amenities: string[];
+  photos: EventPhoto[];
 }
 
 export interface EventProps {
@@ -70,6 +81,8 @@ export interface EventProps {
   verificationStatus: VerificationStatus;
   verificationRejectionReason?: string;
   verifiedAt?: Date;
+  archivedAt?: Date;
+  version: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -121,9 +134,12 @@ export class Event extends AggregateRoot<EventProps> {
         photos,
         status: 'UPLOADED',
         mediaPipelineStatus: 'UPLOADED',
-        visibility: input.visibility ?? 'PUBLIC',
+        // MVP exposes public events only. The enum remains future-ready for a
+        // post-MVP access model, but no creation input can select PRIVATE.
+        visibility: 'PUBLIC',
         radiusKm: MVP_EVENT_REACH_RADIUS_KM,
         verificationStatus: 'UNVERIFIED',
+        version: 0,
         createdAt: now,
         updatedAt: now
       },
@@ -144,6 +160,69 @@ export class Event extends AggregateRoot<EventProps> {
     this.props.verifiedAt = new Date();
     this.props.verificationRejectionReason = undefined;
     this.props.updatedAt = new Date();
+  }
+
+  revise(input: ReviseEventInput): void {
+    if (this.props.archivedAt) throw new DomainValidationError('EVENT_ARCHIVED');
+    if (this.props.status === 'CANCELLED') throw new DomainValidationError('EVENT_NOT_EDITABLE');
+
+    if (input.title.trim().length < MIN_TITLE_LENGTH || input.title.length > MAX_TITLE_LENGTH) {
+      throw new DomainValidationError('EVENT_TITLE_INVALID');
+    }
+    if (input.description.trim().length < MIN_DESCRIPTION_LENGTH) {
+      throw new DomainValidationError('EVENT_DESCRIPTION_TOO_SHORT');
+    }
+    if (!EVENT_CATEGORIES.includes(input.category)) {
+      throw new DomainValidationError('EVENT_CATEGORY_INVALID');
+    }
+    if (input.photos.length < MIN_PHOTOS || input.photos.length > MAX_PHOTOS) {
+      throw new DomainValidationError('EVENT_PHOTO_COUNT_INVALID');
+    }
+
+    this.props.title = input.title.trim();
+    this.props.description = input.description.trim();
+    this.props.category = input.category;
+    this.props.period = EventPeriod.create(input.startDate, input.endDate);
+    this.props.location = EventLocation.create(input.location);
+    this.props.price = Price.create(input.price);
+    this.props.amenities = input.amenities;
+    this.props.photos = input.photos;
+    this.props.status = 'DRAFT';
+    this.props.mediaPipelineStatus = 'UPLOADED';
+    this.props.verificationStatus = 'UNVERIFIED';
+    this.props.verificationRejectionReason = undefined;
+    this.props.verifiedAt = undefined;
+    this.props.updatedAt = new Date();
+  }
+
+  resubmit(): void {
+    if (this.props.archivedAt) throw new DomainValidationError('EVENT_ARCHIVED');
+    // Rejected content must be revised first. revise() clears the rejection and
+    // creates a DRAFT, preventing an unchanged rejected payload from looping.
+    if (this.props.status !== 'DRAFT') {
+      throw new DomainValidationError('EVENT_NOT_RESUBMITTABLE');
+    }
+    this.props.status = 'UPLOADED';
+    this.props.mediaPipelineStatus = 'UPLOADED';
+    this.props.verificationStatus = 'UNVERIFIED';
+    this.props.verificationRejectionReason = undefined;
+    this.props.verifiedAt = undefined;
+    this.props.updatedAt = new Date();
+  }
+
+  cancel(): void {
+    if (this.props.archivedAt) throw new DomainValidationError('EVENT_ARCHIVED');
+    if (this.props.status === 'CANCELLED') throw new DomainValidationError('EVENT_ALREADY_CANCELLED');
+    this.props.status = 'CANCELLED';
+    this.props.updatedAt = new Date();
+  }
+
+  archive(): void {
+    if (this.props.archivedAt) return;
+    const now = new Date();
+    this.props.status = 'CANCELLED';
+    this.props.archivedAt = now;
+    this.props.updatedAt = now;
   }
 
   reject(reason: string): void {
@@ -174,6 +253,9 @@ export class Event extends AggregateRoot<EventProps> {
     if (this.props.verificationStatus !== 'VERIFIED') {
       throw new DomainValidationError('EVENT_NOT_READY');
     }
+    if (this.props.photos.length < MIN_PHOTOS || this.props.photos.length > MAX_PHOTOS) {
+      throw new DomainValidationError('EVENT_PHOTO_COUNT_INVALID');
+    }
     if (this.props.photos.some((photo) => photo.status !== 'READY' || !photo.mediaKey)) {
       throw new DomainValidationError('EVENT_MEDIA_NOT_READY');
     }
@@ -183,6 +265,7 @@ export class Event extends AggregateRoot<EventProps> {
   }
 
   publish(): void {
+    if (this.props.archivedAt) throw new DomainValidationError('EVENT_ARCHIVED');
     if (this.props.status === 'PUBLISHED') {
       throw new DomainValidationError('EVENT_ALREADY_PUBLISHED');
     }
@@ -255,6 +338,14 @@ export class Event extends AggregateRoot<EventProps> {
 
   get verifiedAt(): Date | undefined {
     return this.props.verifiedAt;
+  }
+
+  get archivedAt(): Date | undefined {
+    return this.props.archivedAt;
+  }
+
+  get version(): number {
+    return this.props.version;
   }
 
   get createdAt(): Date {

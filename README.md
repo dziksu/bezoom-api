@@ -2,6 +2,8 @@
 
 Backend platformy do odkrywania lokalnych wydarzeń. MVP obsługuje wyłącznie darmowe konta osobiste. Konta firmowe, płatne promocje i kupowanie większego zasięgu pozostają poza aktywnym kontraktem API.
 
+W MVP wszystkie eventy są publiczne. API nie przyjmuje ani nie zwraca ustawienia widoczności eventu. Model bazy zachowuje wariant `PRIVATE` wyłącznie jako miejsce na zaplanowany etap po MVP; obecnie nie istnieje ścieżka utworzenia ani przełączenia eventu prywatnego.
+
 ## Architektura MVP
 
 - NestJS 11 + TypeScript, modułowy monolit gotowy do horyzontalnego skalowania.
@@ -77,3 +79,53 @@ Procedura dziennego backupu, odtwarzania oraz testu RPO/RTO znajduje się w [run
 Nowy event nie staje się publiczny automatycznie. Przechodzi przez upload, moderację/weryfikację i przygotowanie mediów. Feed, wyszukiwanie, szczegóły oraz engagement dopuszczają tylko eventy publiczne, opublikowane, zweryfikowane i z mediami `READY`. Promień MVP wynosi stałe 5 km i nie może zostać kupiony ani ustawiony przez klienta.
 
 Lokalnie `event.created` jest przekazywany transakcyjnym outboxem do BullMQ, a developerski worker kopiuje media z prywatnego bucketu `raw-uploads` do `media` i ustawia `READY`. Użytkownik publikuje gotowy event przez `POST /api/events/:id/publish`; wymagany jest zweryfikowany telefon. `development_passthrough` jest twardo blokowany przy `NODE_ENV=production` — produkcja wymaga prawdziwej moderacji oraz bezpiecznego dekodowania i ponownego kodowania obrazu.
+
+## Zarządzanie własnym eventem
+
+- `PATCH /api/events/:id` zapisuje zmianę jako `DRAFT`. Edycja eventu opublikowanego natychmiast wycofuje go z publicznych odczytów i zeruje poprzednią weryfikację.
+- `POST /api/events/:id/resubmit` wysyła poprawiony szkic do ponownej moderacji. Event odrzucony musi najpierw przejść przez `PATCH`, więc nie można bez zmian zapętlać odrzuconej treści.
+- `POST /api/events/:id/cancel` ustawia `CANCELLED`, usuwa event z publicznych odczytów i zachowuje go w historii właściciela.
+- `DELETE /api/events/:id` wykonuje soft delete: ustawia `archived_at`, zachowuje spójność danych i ukrywa event także na liście właściciela.
+
+Każda mutacja sprawdza właściciela i maskuje cudzy event kluczem `EVENT_NOT_FOUND`. Zapis używa wersjonowania optymistycznego; równoległa zmiana zwraca `EVENT_CONCURRENT_MODIFICATION`.
+
+## Developerska symulacja SMS
+
+W środowisku developerskim żądanie kodu weryfikacyjnego telefonu wysyła wiadomość e-mail na adres profilu użytkownika przez SMTP Mailpita. Wiadomość jest oznaczona jako symulacja SMS i zawiera numer telefonu, sześciocyfrowy kod oraz czas ważności. Podgląd: `http://localhost:8025`.
+
+Surowy kod istnieje tylko w pamięci na czas wysyłki. Baza przechowuje wyłącznie HMAC kodu, a logi nie zawierają OTP. Tryb developerski jest blokowany dla `NODE_ENV=production`; dopóki nie zostanie podłączony produkcyjny adapter SMS, API zwraca klucz `PHONE_VERIFICATION_SMS_NOT_CONFIGURED`.
+
+## Infinite scroll i zasoby społecznościowe
+
+API nie używa paginacji opartej o `page`, `OFFSET` ani dokładne `total`. Każda lista zwraca kontrakt:
+
+```json
+{
+  "items": [],
+  "hasMore": true,
+  "nextCursor": "opaque-value"
+}
+```
+
+Klient przekazuje otrzymane `nextCursor` jako `?cursor=...`. Kursory są związane z konkretnym zasobem i parametrami wyszukiwania; zmodyfikowany lub użyty w innym kontekście kursor zwraca `CURSOR_INVALID`. Sortowanie ma zawsze deterministyczny drugi klucz UUID, a kolumny czasowe mają precyzję zgodną z JavaScript, dzięki czemu równoległe zapisy nie powodują pomijania rekordów.
+
+Cursor-based infinite scroll obejmuje geo-discovery oraz listy utworzonych, polubionych, zapisanych eventów i tych, w których użytkownik uczestniczy. Zasoby eventu:
+
+- `GET /api/events/:eventId/comments` — komentarze od najnowszych;
+- `POST /api/events/:eventId/comments` — komentarz albo odpowiedź jednego poziomu, maksymalnie 500 znaków;
+- `PATCH /api/events/:eventId/comments/:commentId` — edycja własnego komentarza;
+- `DELETE /api/events/:eventId/comments/:commentId` — soft-delete własnego komentarza;
+- `GET /api/events/:eventId/likes` — publiczne profile osób, które polubiły event;
+- `GET /api/events/:eventId/participants` — publiczne profile potwierdzonych uczestników.
+
+Prywatne i zdezaktywowane profile nie pojawiają się na listach polubień ani uczestników. Liczba komentarzy w `event_stats` aktualizuje się przez transakcyjny outbox i pozostaje eventual-consistent. Tworzenie komentarzy ma limit jednego komentarza na sekundę na użytkownika.
+
+## Zgłoszenia i blokady
+
+- `POST /api/events/:eventId/reports` zapisuje zgłoszenie publicznego eventu jako `PENDING`. Powody: `SPAM`, `INAPPROPRIATE_CONTENT`, `FRAUD`, `OTHER`; opis jest opcjonalny i ma maksymalnie 1000 znaków.
+- Ponowienie oczekującego zgłoszenia przez tę samą osobę jest idempotentne. Indeks kolejki `(created_at, id)` przygotowuje odczyt dla przyszłego automatu, który ustawi `IGNORED` albo `ESCALATED`.
+- `PUT /api/user/blocks/:profileId` i `DELETE /api/user/blocks/:profileId` blokują/odblokowują użytkownika idempotentnie.
+- `GET /api/user/blocks` zwraca listę blokad przez cursor-based infinite scroll.
+- Blokada działa dwukierunkowo dla zalogowanych odczytów i nowych interakcji. Usunięcie wcześniejszego lajka, zapisu lub RSVP pozostaje możliwe. Anonimowy odbiorca nadal widzi publiczne eventy — blokada nie zmienia publicznego eventu w treść prywatną.
+
+API klienta nie zawiera kolejki moderatorskiej ani decyzji administratora; panel administracyjny pozostanie osobną aplikacją.

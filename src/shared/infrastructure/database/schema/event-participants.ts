@@ -14,11 +14,11 @@ export const eventParticipants = pgTable(
     })
       .notNull()
       .default('MAYBE'),
-    joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull()
+    joinedAt: timestamp('joined_at', { withTimezone: true, precision: 3 }).defaultNow().notNull()
   },
   (t) => [
     uniqueIndex('event_participants_event_keycloak_sub_idx').on(t.eventId, t.keycloakSub),
-    index('event_participants_user_joined_idx').on(t.keycloakSub, t.joinedAt),
-    index('event_participants_event_status_idx').on(t.eventId, t.status)
+    index('event_participants_user_joined_idx').on(t.keycloakSub, t.joinedAt.desc(), t.id.desc()),
+    index('event_participants_event_status_idx').on(t.eventId, t.status, t.joinedAt.desc(), t.id.desc())
   ]
 );

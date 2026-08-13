@@ -21,11 +21,10 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import { EVENT_CATEGORIES, type EventCategory, type EventVisibility } from '../../domain/event.aggregate';
+import { EVENT_CATEGORIES, type EventCategory } from '../../domain/event.aggregate';
 import type { PriceType } from '../../domain/value-objects/price.vo';
 
 const PRICE_TYPES: PriceType[] = ['FREE', 'FIXED', 'RANGE', 'DONATION'];
-const VISIBILITIES: EventVisibility[] = ['PUBLIC', 'PRIVATE'];
 
 @ValidatorConstraint({ name: 'IsFutureDate', async: false })
 class IsFutureDateConstraint implements ValidatorConstraintInterface {
@@ -137,11 +136,6 @@ export class CreateEventDto {
   @ArrayMaxSize(20)
   @IsString({ each: true })
   amenities?: string[];
-
-  @ApiProperty({ enum: VISIBILITIES, required: false, default: 'PUBLIC' })
-  @IsOptional()
-  @IsEnum(VISIBILITIES)
-  visibility?: EventVisibility;
 
   @ApiProperty({
     type: [String],

@@ -62,8 +62,8 @@ export class UserController {
   })
   @ApiResponse({ status: 404, description: 'Profile not found' })
   @Get('profile/:id')
-  async getProfileById(@Param('id') profileId: string) {
-    return this.profileService.getProfileById(profileId);
+  async getProfileById(@CurrentUser() user: ICurrentUser, @Param('id') profileId: string) {
+    return this.profileService.getProfileById(profileId, user.id);
   }
 
   /**

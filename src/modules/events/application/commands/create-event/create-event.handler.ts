@@ -67,7 +67,6 @@ export class CreateEventHandler implements ICommandHandler<CreateEventCommand, E
             priceNotes: command.priceNotes
           },
           amenities: command.amenities,
-          visibility: command.visibility,
           photos: linkedPhotos
         },
         eventId
@@ -106,7 +105,6 @@ export class CreateEventHandler implements ICommandHandler<CreateEventCommand, E
       // Raw uploads remain private until moderation/media processing marks them READY.
       photos: [],
       status: event.status,
-      visibility: event.visibility,
       verificationStatus: event.verificationStatus,
       verificationRejectionReason: event.verificationRejectionReason,
       createdAt: event.createdAt

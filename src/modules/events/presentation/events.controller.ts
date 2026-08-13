@@ -7,26 +7,27 @@ import {
   HttpStatus,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Put,
   Query
 } from '@nestjs/common';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CurrentUser, Public } from '@api/shared/infrastructure/auth';
+import { CurrentUser, OptionalAuth } from '@api/shared/infrastructure/auth';
 import type { ICurrentUser } from '@api/shared/infrastructure/auth';
 import { RedisRateLimit } from '@api/shared/infrastructure/rate-limit';
 import { CreateEventDto } from '../application/dto/create-event.dto';
 import { RequestPhotoUploadsDto, PhotoUploadTargetDto } from '../application/dto/request-photo-uploads.dto';
 import { SearchEventsQueryDto } from '../application/dto/search-events.query.dto';
-import { PaginatedEventsQueryDto } from '../application/dto/paginated-events.query.dto';
+import { CursorQueryDto } from '../application/dto/cursor-query.dto';
 import { SetRsvpDto, LikeResponseDto, SaveResponseDto, RsvpResponseDto } from '../application/dto/engagement.dto';
 import {
   EventResponseDto,
   EventDetailDto,
   EventSearchResponseDto,
-  PaginatedEventsDto,
-  PaginatedAttendingEventsDto,
+  CursorEventsDto,
+  CursorAttendingEventsDto,
   EventLifecycleResponseDto
 } from '../application/dto/event-response.dto';
 import { CreateEventCommand } from '../application/commands/create-event/create-event.command';
@@ -35,6 +36,11 @@ import { SetEventLikeCommand } from '../application/commands/set-event-like/set-
 import { SetEventSaveCommand } from '../application/commands/set-event-save/set-event-save.command';
 import { SetRsvpCommand } from '../application/commands/set-rsvp/set-rsvp.command';
 import { PublishEventCommand } from '../application/commands/publish-event/publish-event.command';
+import { UpdateEventCommand } from '../application/commands/update-event/update-event.command';
+import { ResubmitEventCommand } from '../application/commands/resubmit-event/resubmit-event.command';
+import { CancelEventCommand } from '../application/commands/cancel-event/cancel-event.command';
+import { ArchiveEventCommand } from '../application/commands/archive-event/archive-event.command';
+import { UpdateEventDto } from '../application/dto/update-event.dto';
 import { SearchEventsByLocationQuery } from '../application/queries/search-events-by-location/search-events-by-location.query';
 import { GetEventByIdQuery } from '../application/queries/get-event-by-id/get-event-by-id.query';
 import { ListMyCreatedEventsQuery } from '../application/queries/list-my-created-events/list-my-created-events.query';
@@ -83,8 +89,7 @@ export class EventsController {
         dto.currency,
         dto.ticketUrl,
         dto.priceNotes,
-        dto.amenities,
-        dto.visibility
+        dto.amenities
       )
     );
   }
@@ -125,6 +130,64 @@ export class EventsController {
     return this.commandBus.execute(new PublishEventCommand(id, user.id));
   }
 
+  @ApiOperation({
+    summary: 'Edit my event',
+    description:
+      'Saves a new draft revision. A published event is removed from discovery until it is resubmitted, processed and published again.'
+  })
+  @ApiResponse({ status: 200, description: 'Revision saved as draft', type: EventLifecycleResponseDto })
+  @HttpCode(HttpStatus.OK)
+  @Patch(':id')
+  @RedisRateLimit({ name: 'event_update_user', limit: 20, windowSeconds: 60, scopes: ['user'] })
+  async updateEvent(
+    @CurrentUser() user: ICurrentUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateEventDto
+  ): Promise<EventLifecycleResponseDto> {
+    return this.commandBus.execute(new UpdateEventCommand(id, user.id, dto));
+  }
+
+  @ApiOperation({
+    summary: 'Resubmit my draft for moderation',
+    description: 'A rejected event must first be revised with PATCH /events/:id.'
+  })
+  @ApiResponse({ status: 200, description: 'Event queued for review', type: EventLifecycleResponseDto })
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/resubmit')
+  @RedisRateLimit({ name: 'event_resubmit_user', limit: 10, windowSeconds: 60, scopes: ['user'] })
+  async resubmitEvent(
+    @CurrentUser() user: ICurrentUser,
+    @Param('id', ParseUUIDPipe) id: string
+  ): Promise<EventLifecycleResponseDto> {
+    return this.commandBus.execute(new ResubmitEventCommand(id, user.id));
+  }
+
+  @ApiOperation({
+    summary: 'Cancel my event',
+    description: 'Keeps the event for owner history but removes it from public APIs.'
+  })
+  @ApiResponse({ status: 200, description: 'Event cancelled', type: EventLifecycleResponseDto })
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/cancel')
+  async cancelEvent(
+    @CurrentUser() user: ICurrentUser,
+    @Param('id', ParseUUIDPipe) id: string
+  ): Promise<EventLifecycleResponseDto> {
+    return this.commandBus.execute(new CancelEventCommand(id, user.id));
+  }
+
+  @ApiOperation({
+    summary: 'Archive my event',
+    description:
+      'Soft-deletes the event. Data remains in storage for integrity/audit but disappears from owner and public APIs.'
+  })
+  @ApiResponse({ status: 204, description: 'Event archived' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':id')
+  async archiveEvent(@CurrentUser() user: ICurrentUser, @Param('id', ParseUUIDPipe) id: string): Promise<void> {
+    return this.commandBus.execute(new ArchiveEventCommand(id, user.id));
+  }
+
   // ── Discovery / read (declared before /:id so static paths win) ──────────
 
   @ApiOperation({
@@ -133,55 +196,49 @@ export class EventsController {
       'Returns published, verified, public events visible at (lat, lng), ordered by distance. Reach is assigned by the backend. Optionally filter by week (0 = current Warsaw week, 1 = next week, ...).'
   })
   @ApiResponse({ status: 200, description: 'Matching events', type: EventSearchResponseDto })
-  @Public()
+  @OptionalAuth()
   @Get('search')
-  async searchEvents(@Query() query: SearchEventsQueryDto): Promise<EventSearchResponseDto> {
+  async searchEvents(
+    @Query() query: SearchEventsQueryDto,
+    @CurrentUser() user?: ICurrentUser
+  ): Promise<EventSearchResponseDto> {
     return this.queryBus.execute(
-      new SearchEventsByLocationQuery(query.lat, query.lng, query.week, query.page ?? 1, query.limit ?? 20)
+      new SearchEventsByLocationQuery(query.lat, query.lng, query.week, query.cursor, query.limit ?? 20, user?.id)
     );
   }
 
   @ApiOperation({ summary: 'List events I created', description: 'Events organized by the current user (any status).' })
-  @ApiResponse({ status: 200, description: 'My created events', type: PaginatedEventsDto })
+  @ApiResponse({ status: 200, description: 'My created events', type: CursorEventsDto })
   @Get('me/created')
-  async listMyCreated(
-    @CurrentUser() user: ICurrentUser,
-    @Query() query: PaginatedEventsQueryDto
-  ): Promise<PaginatedEventsDto> {
-    return this.queryBus.execute(new ListMyCreatedEventsQuery(user.id, query.page ?? 1, query.limit ?? 20));
+  async listMyCreated(@CurrentUser() user: ICurrentUser, @Query() query: CursorQueryDto): Promise<CursorEventsDto> {
+    return this.queryBus.execute(new ListMyCreatedEventsQuery(user.id, query.cursor, query.limit ?? 20));
   }
 
   @ApiOperation({
     summary: 'List events I am attending',
     description: 'Events the current user has RSVP’d to, including their RSVP status.'
   })
-  @ApiResponse({ status: 200, description: 'My attendance', type: PaginatedAttendingEventsDto })
+  @ApiResponse({ status: 200, description: 'My attendance', type: CursorAttendingEventsDto })
   @Get('me/attending')
   async listMyAttending(
     @CurrentUser() user: ICurrentUser,
-    @Query() query: PaginatedEventsQueryDto
-  ): Promise<PaginatedAttendingEventsDto> {
-    return this.queryBus.execute(new ListMyAttendingEventsQuery(user.id, query.page ?? 1, query.limit ?? 20));
+    @Query() query: CursorQueryDto
+  ): Promise<CursorAttendingEventsDto> {
+    return this.queryBus.execute(new ListMyAttendingEventsQuery(user.id, query.cursor, query.limit ?? 20));
   }
 
   @ApiOperation({ summary: 'List events I liked' })
-  @ApiResponse({ status: 200, description: 'My liked events', type: PaginatedEventsDto })
+  @ApiResponse({ status: 200, description: 'My liked events', type: CursorEventsDto })
   @Get('me/liked')
-  async listMyLiked(
-    @CurrentUser() user: ICurrentUser,
-    @Query() query: PaginatedEventsQueryDto
-  ): Promise<PaginatedEventsDto> {
-    return this.queryBus.execute(new ListMyLikedEventsQuery(user.id, query.page ?? 1, query.limit ?? 20));
+  async listMyLiked(@CurrentUser() user: ICurrentUser, @Query() query: CursorQueryDto): Promise<CursorEventsDto> {
+    return this.queryBus.execute(new ListMyLikedEventsQuery(user.id, query.cursor, query.limit ?? 20));
   }
 
   @ApiOperation({ summary: 'List events I saved' })
-  @ApiResponse({ status: 200, description: 'My saved events', type: PaginatedEventsDto })
+  @ApiResponse({ status: 200, description: 'My saved events', type: CursorEventsDto })
   @Get('me/saved')
-  async listMySaved(
-    @CurrentUser() user: ICurrentUser,
-    @Query() query: PaginatedEventsQueryDto
-  ): Promise<PaginatedEventsDto> {
-    return this.queryBus.execute(new ListMySavedEventsQuery(user.id, query.page ?? 1, query.limit ?? 20));
+  async listMySaved(@CurrentUser() user: ICurrentUser, @Query() query: CursorQueryDto): Promise<CursorEventsDto> {
+    return this.queryBus.execute(new ListMySavedEventsQuery(user.id, query.cursor, query.limit ?? 20));
   }
 
   @ApiOperation({
@@ -191,10 +248,13 @@ export class EventsController {
   @ApiParam({ name: 'id', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Event detail', type: EventDetailDto })
   @ApiResponse({ status: 404, description: 'Event not found' })
-  @Public()
+  @OptionalAuth()
   @Get(':id')
-  async getEventById(@Param('id', ParseUUIDPipe) id: string): Promise<EventDetailDto> {
-    return this.queryBus.execute(new GetEventByIdQuery(id));
+  async getEventById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user?: ICurrentUser
+  ): Promise<EventDetailDto> {
+    return this.queryBus.execute(new GetEventByIdQuery(id, user?.id));
   }
 
   // ── Engagement (like / save / RSVP) ──────────────────────────────────────

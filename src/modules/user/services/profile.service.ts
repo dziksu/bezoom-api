@@ -32,6 +32,8 @@ import {
   PHONE_VERIFICATION_COOLDOWN_MS,
   PHONE_VERIFICATION_MAX_ATTEMPTS
 } from './phone-verification';
+import { PhoneVerificationDelivery } from './phone-verification-delivery';
+import { UserBlockRepository } from '@api/modules/safety/domain/user-block.repository';
 
 type ProfileRecord = typeof profiles.$inferSelect;
 
@@ -52,7 +54,9 @@ export class ProfileService {
     private readonly drizzleWrite: DrizzleWriteService,
     private readonly drizzleRead: DrizzleReadService,
     private readonly fileStorage: FileStorageService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly phoneVerificationDelivery: PhoneVerificationDelivery,
+    private readonly userBlocks: UserBlockRepository
   ) {}
 
   /**
@@ -76,7 +80,7 @@ export class ProfileService {
   /**
    * Get profile by ID (public lookup)
    */
-  async getProfileById(profileId: string): Promise<PublicProfileResponseDto> {
+  async getProfileById(profileId: string, viewerKeycloakSub?: string): Promise<PublicProfileResponseDto> {
     const result = await this.drizzleRead.db.select().from(profiles).where(eq(profiles.id, profileId)).limit(1);
 
     if (result.length === 0) {
@@ -84,6 +88,9 @@ export class ProfileService {
     }
 
     const profile = result[0];
+    if (viewerKeycloakSub && (await this.userBlocks.isBlockedBetween(viewerKeycloakSub, profile.keycloakSub))) {
+      throw new NotFoundException('PROFILE_NOT_FOUND');
+    }
 
     return this.toPublicResponseDto(profile);
   }
@@ -375,7 +382,9 @@ export class ProfileService {
     const verificationHash = hashPhoneVerificationCode(verificationCode, this.phoneVerificationSecret());
     const expiresAt = new Date(now.getTime() + PHONE_VERIFICATION_CODE_TTL_MS);
 
-    // TODO: Deliver verificationCode through the SMS adapter. Never log or persist the raw code.
+    if (!profile.email) {
+      throw new BadRequestException('PHONE_VERIFICATION_DELIVERY_ADDRESS_MISSING');
+    }
 
     await this.drizzleWrite.db
       .update(profiles)
@@ -389,6 +398,19 @@ export class ProfileService {
         updatedAt: new Date()
       })
       .where(eq(profiles.keycloakSub, keycloakSub));
+
+    try {
+      await this.phoneVerificationDelivery.send({
+        phoneNumber: requestDto.phoneNumber,
+        recipientEmail: profile.email,
+        verificationCode,
+        expiresInSeconds: PHONE_VERIFICATION_CODE_TTL_MS / 1000
+      });
+    } catch (error) {
+      await this.clearPhoneVerification(keycloakSub);
+      if (error instanceof ServiceUnavailableException) throw error;
+      throw new ServiceUnavailableException('PHONE_VERIFICATION_DELIVERY_FAILED');
+    }
 
     this.logger.log('PHONE_VERIFICATION_REQUESTED');
     return {
@@ -481,6 +503,7 @@ export class ProfileService {
       .set({
         phoneVerificationToken: null,
         phoneVerificationExpiresAt: null,
+        phoneVerificationSentAt: null,
         phoneVerificationAttempts: 0,
         updatedAt: new Date()
       })
