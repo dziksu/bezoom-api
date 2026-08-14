@@ -7,12 +7,12 @@ import type { RedisCacheService } from '@api/shared/infrastructure/cache/redis-c
 import { MVP_DISCOVERY_RADIUS_METERS, SearchEventsByLocationHandler } from './search-events-by-location.handler';
 import { SearchEventsByLocationQuery } from './search-events-by-location.query';
 
-const searchRow = (id: string) => ({
+const searchRow = (id: string, timestampsAsText = false) => ({
   id,
   title: `Event ${id}`,
   description: 'A sufficiently descriptive event description for discovery.',
   category: 'MUSIC_AND_NIGHTLIFE',
-  start_date: new Date('2026-09-01T18:00:00.000Z'),
+  start_date: timestampsAsText ? '2026-09-01 18:00:00+00' : new Date('2026-09-01T18:00:00.000Z'),
   end_date: null,
   organizer_id: 'cd7ee731-259a-46d8-93ea-5580753b3637',
   price_type: 'FREE',
@@ -24,7 +24,7 @@ const searchRow = (id: string) => ({
   amenities: [],
   status: 'PUBLISHED',
   verification_status: 'VERIFIED',
-  created_at: new Date('2026-08-01T10:00:00.000Z'),
+  created_at: timestampsAsText ? '2026-08-01 10:00:00+00' : new Date('2026-08-01T10:00:00.000Z'),
   latitude: '50.0647000',
   longitude: '19.9450000',
   address: null,
@@ -71,6 +71,10 @@ describe('SearchEventsByLocationHandler', () => {
     const normalizedSql = compiled.sql.replace(/\s+/g, ' ').toLowerCase();
 
     expect(normalizedSql).toContain('join locations l on st_dwithin(l.geog, p.origin,');
+    expect(normalizedSql).toContain('nearby as materialized');
+    expect(normalizedSql).toContain('st_distance(l.geog, p.origin, false)');
+    expect(normalizedSql).toContain('st_dwithin(l.geog, p.origin, $');
+    expect(normalizedSql).toContain(', false)');
     expect(normalizedSql).toContain('and e.start_date > now()');
     expect(normalizedSql).toContain('and e.radius_km =');
     expect(normalizedSql).toContain('and e.archived_at is null');
@@ -101,5 +105,16 @@ describe('SearchEventsByLocationHandler', () => {
     expect(result.items).toHaveLength(1);
     expect(result.hasMore).toBe(false);
     expect(result.nextCursor).toBeUndefined();
+  });
+
+  it('normalizes raw PostgreSQL timestamptz text to Date objects', async () => {
+    executeRows = [searchRow('text-timestamps', true)];
+
+    const result = await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, undefined, undefined, 20));
+
+    expect(result.items[0].startDate).toBeInstanceOf(Date);
+    expect(result.items[0].startDate.toISOString()).toBe('2026-09-01T18:00:00.000Z');
+    expect(result.items[0].createdAt).toBeInstanceOf(Date);
+    expect(result.items[0].createdAt.toISOString()).toBe('2026-08-01T10:00:00.000Z');
   });
 });

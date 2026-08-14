@@ -19,8 +19,8 @@ interface SearchRow {
   title: string;
   description: string;
   category: string;
-  start_date: Date;
-  end_date: Date | null;
+  start_date: Date | string;
+  end_date: Date | string | null;
   organizer_id: string | null;
   price_type: string | null;
   price_min: string | null;
@@ -31,7 +31,7 @@ interface SearchRow {
   amenities: string[] | null;
   status: string;
   verification_status: string;
-  created_at: Date;
+  created_at: Date | string;
   latitude: string;
   longitude: string;
   address: string | null;
@@ -79,6 +79,14 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           ST_SetSRID(ST_MakePoint(${query.lng}, ${query.lat}), 4326)::geography AS origin,
           (date_trunc('week', (now() AT TIME ZONE 'Europe/Warsaw')) + (${week} * interval '7 days')) AS week_start
       )
+      , nearby AS MATERIALIZED (
+        SELECT
+          l.event_id, l.latitude, l.longitude, l.address, l.city, l.country,
+          p.week_start,
+          ST_Distance(l.geog, p.origin, false) AS distance_m
+        FROM params p
+        JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MVP_DISCOVERY_RADIUS_METERS}, false)
+      )
       , candidates AS (
         SELECT
           e.id, e.title, e.description, e.category, e.start_date, e.end_date,
@@ -86,9 +94,8 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           e.ticket_url, e.price_notes, e.amenities, e.status,
           e.verification_status, e.created_at,
           l.latitude, l.longitude, l.address, l.city, l.country,
-          ST_Distance(l.geog, p.origin) AS distance_m
-        FROM params p
-        JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MVP_DISCOVERY_RADIUS_METERS})
+          l.distance_m
+        FROM nearby l
         JOIN events e ON e.id = l.event_id
         JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
         WHERE e.status = 'PUBLISHED'
@@ -110,8 +117,8 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           )
           AND (
             ${weekIsNull} OR (
-              (e.start_date AT TIME ZONE 'Europe/Warsaw') >= p.week_start
-              AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < p.week_start + interval '7 days'
+              (e.start_date AT TIME ZONE 'Europe/Warsaw') >= l.week_start
+              AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < l.week_start + interval '7 days'
             )
           )
       )
@@ -136,8 +143,8 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
         title: row.title,
         description: row.description,
         category: row.category,
-        startDate: row.start_date,
-        endDate: row.end_date ?? undefined,
+        startDate: this.databaseDate(row.start_date),
+        endDate: row.end_date ? this.databaseDate(row.end_date) : undefined,
         organizerId: row.organizer_id ?? undefined,
         latitude: Number(row.latitude),
         longitude: Number(row.longitude),
@@ -154,7 +161,7 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
         photos: [],
         status: row.status,
         verificationStatus: row.verification_status,
-        createdAt: row.created_at,
+        createdAt: this.databaseDate(row.created_at),
         distanceKm: Math.round((row.distance_m / 1000) * 10) / 10,
         coverPhotoUrl: coverPhotos.has(row.id)
           ? this.objectStorage.getPublicUrl(this.objectStorage.mediaBucket, coverPhotos.get(row.id)!)
@@ -184,5 +191,12 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
       .orderBy(eventPhotos.eventId, eventPhotos.position);
 
     return new Map(rows.filter((r) => r.mediaKey).map((r) => [r.eventId as string, r.mediaKey as string]));
+  }
+
+  /** Raw pg execution returns timestamptz as text in this read path. */
+  private databaseDate(value: Date | string): Date {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) throw new Error('EVENT_TIMESTAMP_INVALID');
+    return date;
   }
 }

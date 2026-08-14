@@ -41,6 +41,45 @@ docker compose --profile observability up -d
 - Mailpit: `http://localhost:8025`
 - MinIO Console: `http://localhost:9001`
 
+## Realistyczny seed danych
+
+Seed tworzy przekrojowy obraz rosnącej aplikacji eventowej w Polsce: profile zakładane w ciągu ostatnich 18 miesięcy, coraz liczniejszą grupę twórców, wszystkie kategorie eventów, lokalizacje w 18 miastach oraz aktywność o nierównym rozkładzie popularności. Daty eventów są zawsze liczone względem chwili uruchomienia — obejmują historię, bieżący tydzień i kolejne miesiące. Dane mają stabilne UUID i są oznaczone technicznym prefiksem `seed:v1:`, więc ponowne uruchomienie usuwa wyłącznie poprzedni seed, nie dane utworzone ręcznie.
+
+Po uruchomieniu usług i migracji:
+
+```bash
+# domyślnie: 5 000 profili, 300 twórców, 8 000 eventów
+pnpm db:seed
+
+# krótki zestaw do codziennej pracy
+pnpm db:seed -- --scale=demo
+
+# niemal 2 mln rekordów aktywności do pomiarów wydajności
+pnpm db:seed -- --scale=performance
+```
+
+Jeśli polecenie jest wykonywane wewnątrz kontenera API, równoważna forma to `docker compose exec api pnpm db:seed`. Seed domyślnie dodaje do MinIO lekkie, współdzielone grafiki SVG dla kategorii i avatarów. Gdy potrzebne są tylko rekordy PostgreSQL, można użyć `--skip-media`.
+
+| Skala         | Profile | Twórcy | Eventy |   Lajki |  Zapisy |    RSVP | Komentarze | Znajomości | Notyfikacje |
+| ------------- | ------: | -----: | -----: | ------: | ------: | ------: | ---------: | ---------: | ----------: |
+| `demo`        |   1 000 |     80 |  1 200 |  12 000 |   5 000 |   7 000 |      2 000 |      3 000 |       5 000 |
+| `development` |   5 000 |    300 |  8 000 | 120 000 |  50 000 |  80 000 |     25 000 |     35 000 |      60 000 |
+| `performance` |  25 000 |  1 500 | 40 000 | 600 000 | 260 000 | 380 000 |    120 000 |    200 000 |     350 000 |
+
+Przydatne opcje:
+
+```bash
+# pokaż rozmiar zestawu bez połączenia z usługami
+pnpm db:seed -- --scale=performance --dry-run
+
+# stała data odniesienia do powtarzalnego benchmarku
+pnpm db:seed -- --reference-date=2026-08-14 --random-seed=benchmark-1
+```
+
+Seed jest blokowany przy `NODE_ENV=production`, chyba że operator jawnie doda `--allow-production`. Na czas zapisu używa transakcji i blokady advisory, a na końcu wypisuje rzeczywiste liczebności głównych tabel.
+
+Metodologia testów, znalezione wąskie gardła oraz wyniki optymalizacji geo-search są opisane w [notatce o seedzie wydajnościowym](docs/operations/performance-seed-and-geo-search.md).
+
 ## Kontrakt błędów
 
 API nigdy nie wysyła użytkownikowi gotowego tłumaczenia błędu:

@@ -1,5 +1,16 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, text, timestamp, uuid, varchar, boolean, integer, check, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+  boolean,
+  integer,
+  check,
+  index,
+  uniqueIndex
+} from 'drizzle-orm/pg-core';
 
 /**
  * User Profiles Table
@@ -74,6 +85,9 @@ export const profiles = pgTable(
     ),
     uniqueIndex('profiles_username_lower_unique')
       .on(sql`lower(${table.username})`)
-      .where(sql`${table.username} IS NOT NULL`)
+      .where(sql`${table.username} IS NOT NULL`),
+    index('profiles_active_keycloak_sub_idx')
+      .on(table.keycloakSub)
+      .where(sql`${table.accountStatus} = 'ACTIVE'`)
   ]
 );
