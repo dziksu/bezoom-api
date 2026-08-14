@@ -126,6 +126,65 @@ export class EventSearchResponseDto {
   nextCursor?: string;
 }
 
+export class MapEventPinDto extends EventSearchResultDto {
+  @ApiProperty({ description: 'Configured event reach in kilometres.' })
+  reachKm: number;
+
+  @ApiProperty({ enum: ['LOCAL', 'CITY', 'REGIONAL', 'NATIONAL'] })
+  visibilityLevel: 'LOCAL' | 'CITY' | 'REGIONAL' | 'NATIONAL';
+}
+
+export class MapClusterBoundsDto {
+  @ApiProperty()
+  west: number;
+
+  @ApiProperty()
+  south: number;
+
+  @ApiProperty()
+  east: number;
+
+  @ApiProperty()
+  north: number;
+}
+
+export class MapEventClusterDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  latitude: number;
+
+  @ApiProperty()
+  longitude: number;
+
+  @ApiProperty({ description: 'Exact number of events represented by this cluster.' })
+  count: number;
+
+  @ApiProperty({ type: MapClusterBoundsDto })
+  bounds: MapClusterBoundsDto;
+}
+
+export class MapEventsResponseDto {
+  @ApiProperty({ type: [MapEventPinDto], description: 'Events whose reach makes them individually visible at this zoom.' })
+  events: MapEventPinDto[];
+
+  @ApiProperty({ type: [MapEventClusterDto], description: 'All remaining events grouped into deterministic map cells.' })
+  clusters: MapEventClusterDto[];
+
+  @ApiProperty({ description: 'Exact number of matching events in the viewport before visual aggregation.' })
+  totalCount: number;
+
+  @ApiProperty({ description: 'Events represented by individual pins plus all cluster counts; equals totalCount.' })
+  representedCount: number;
+
+  @ApiProperty({ description: 'Minimum reach in kilometres required for an individual pin at this zoom.' })
+  individualReachKm: number;
+
+  @ApiProperty()
+  zoom: number;
+}
+
 export class EventDetailDto extends EventResponseDto {
   @ApiProperty()
   likesCount: number;

@@ -20,6 +20,7 @@ import { RedisRateLimit } from '@api/shared/infrastructure/rate-limit';
 import { CreateEventDto } from '../application/dto/create-event.dto';
 import { RequestPhotoUploadsDto, PhotoUploadTargetDto } from '../application/dto/request-photo-uploads.dto';
 import { SearchEventsQueryDto } from '../application/dto/search-events.query.dto';
+import { MapEventsQueryDto } from '../application/dto/map-events.query.dto';
 import { CursorQueryDto } from '../application/dto/cursor-query.dto';
 import { SetRsvpDto, LikeResponseDto, SaveResponseDto, RsvpResponseDto } from '../application/dto/engagement.dto';
 import {
@@ -28,7 +29,8 @@ import {
   EventSearchResponseDto,
   CursorEventsDto,
   CursorAttendingEventsDto,
-  EventLifecycleResponseDto
+  EventLifecycleResponseDto,
+  MapEventsResponseDto
 } from '../application/dto/event-response.dto';
 import { CreateEventCommand } from '../application/commands/create-event/create-event.command';
 import { RequestPhotoUploadsCommand } from '../application/commands/request-photo-uploads/request-photo-uploads.command';
@@ -42,6 +44,7 @@ import { CancelEventCommand } from '../application/commands/cancel-event/cancel-
 import { ArchiveEventCommand } from '../application/commands/archive-event/archive-event.command';
 import { UpdateEventDto } from '../application/dto/update-event.dto';
 import { SearchEventsByLocationQuery } from '../application/queries/search-events-by-location/search-events-by-location.query';
+import { GetMapEventsQuery } from '../application/queries/get-map-events/get-map-events.query';
 import { GetEventByIdQuery } from '../application/queries/get-event-by-id/get-event-by-id.query';
 import { ListMyCreatedEventsQuery } from '../application/queries/list-my-created-events/list-my-created-events.query';
 import { ListMyAttendingEventsQuery } from '../application/queries/list-my-attending-events/list-my-attending-events.query';
@@ -189,6 +192,23 @@ export class EventsController {
   }
 
   // ── Discovery / read (declared before /:id so static paths win) ──────────
+
+  @ApiOperation({
+    summary: 'Get the complete visual representation of events in a map viewport',
+    description:
+      'Returns individually visible promoted/reach-qualified events, clusters for every remaining event, and an exact total. This endpoint is viewport-based and intentionally has no text-search parameter.'
+  })
+  @ApiResponse({ status: 200, description: 'Map pins, clusters and exact viewport total', type: MapEventsResponseDto })
+  @OptionalAuth()
+  @Get('map')
+  async getMapEvents(
+    @Query() query: MapEventsQueryDto,
+    @CurrentUser() user?: ICurrentUser
+  ): Promise<MapEventsResponseDto> {
+    return this.queryBus.execute(
+      new GetMapEventsQuery(query.west, query.south, query.east, query.north, query.zoom, query.week, user?.id)
+    );
+  }
 
   @ApiOperation({
     summary: 'Search events by location',

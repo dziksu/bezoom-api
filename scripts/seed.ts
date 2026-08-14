@@ -236,6 +236,14 @@ function eventState(random: () => number): {
   return { status: 'PUBLISHED', mediaStatus: 'READY', verification: 'VERIFIED', archived: true };
 }
 
+function eventReachKm(random: () => number): number {
+  const roll = random();
+  if (roll < 0.0075) return 1_000;
+  if (roll < 0.025) return 150;
+  if (roll < 0.08) return 25;
+  return 5;
+}
+
 function price(random: () => number): {
   type: string;
   min: number | null;
@@ -328,18 +336,28 @@ async function insertRows(
 
 async function cleanPreviousSeed(client: Client): Promise<void> {
   await client.query(`
+    CREATE TEMP TABLE seed_event_ids (id uuid PRIMARY KEY) ON COMMIT DROP;
+    INSERT INTO seed_event_ids (id)
+    SELECT id FROM events WHERE organizer_keycloak_sub LIKE '${seedPrefix}%';
+
     DELETE FROM moderation_reports
     WHERE reported_by_keycloak_sub LIKE '${seedPrefix}%'
-       OR event_id IN (SELECT id FROM events WHERE organizer_keycloak_sub LIKE '${seedPrefix}%');
+       OR event_id IN (SELECT id FROM seed_event_ids);
+    DELETE FROM event_likes
+    WHERE keycloak_sub LIKE '${seedPrefix}%' OR event_id IN (SELECT id FROM seed_event_ids);
+    DELETE FROM event_saves
+    WHERE keycloak_sub LIKE '${seedPrefix}%' OR event_id IN (SELECT id FROM seed_event_ids);
+    DELETE FROM event_participants
+    WHERE keycloak_sub LIKE '${seedPrefix}%' OR event_id IN (SELECT id FROM seed_event_ids);
+    DELETE FROM event_comments
+    WHERE author_keycloak_sub LIKE '${seedPrefix}%' OR event_id IN (SELECT id FROM seed_event_ids);
+    DELETE FROM event_stats WHERE event_id IN (SELECT id FROM seed_event_ids);
+    DELETE FROM event_photos WHERE event_id IN (SELECT id FROM seed_event_ids);
     DELETE FROM locations
-    WHERE event_id IN (SELECT id FROM events WHERE organizer_keycloak_sub LIKE '${seedPrefix}%');
+    WHERE event_id IN (SELECT id FROM seed_event_ids);
     DELETE FROM event_outbox
-    WHERE aggregate_id IN (SELECT id FROM events WHERE organizer_keycloak_sub LIKE '${seedPrefix}%');
-    DELETE FROM events WHERE organizer_keycloak_sub LIKE '${seedPrefix}%';
-    DELETE FROM event_likes WHERE keycloak_sub LIKE '${seedPrefix}%';
-    DELETE FROM event_saves WHERE keycloak_sub LIKE '${seedPrefix}%';
-    DELETE FROM event_participants WHERE keycloak_sub LIKE '${seedPrefix}%';
-    DELETE FROM event_comments WHERE author_keycloak_sub LIKE '${seedPrefix}%';
+    WHERE aggregate_id IN (SELECT id FROM seed_event_ids);
+    DELETE FROM events WHERE id IN (SELECT id FROM seed_event_ids);
     DELETE FROM notifications WHERE keycloak_sub LIKE '${seedPrefix}%';
     DELETE FROM friendships WHERE keycloak_sub_1 LIKE '${seedPrefix}%' OR keycloak_sub_2 LIKE '${seedPrefix}%';
     DELETE FROM user_blocks WHERE blocker_keycloak_sub LIKE '${seedPrefix}%' OR blocked_keycloak_sub LIKE '${seedPrefix}%';
@@ -550,7 +568,7 @@ async function seedEvents(client: Client, config: ScaleDefinition, options: Seed
       state.mediaStatus ? Number((random() * 0.08).toFixed(4)) : null,
       state.mediaStatus ? activityDate(random, options.referenceNow, createdAt, 30) : null,
       'PUBLIC',
-      5,
+      eventReachKm(random),
       state.verification,
       state.verification === 'REJECTED' ? 'Treść wymaga poprawy przed ponownym zgłoszeniem.' : null,
       state.verification === 'VERIFIED' ? activityDate(random, options.referenceNow, createdAt, 30) : null,

@@ -34,7 +34,7 @@
   "refreshTokenMaxReuse": 0,
 
   "defaultSignatureAlgorithm": "RS256",
-  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)",
+  "passwordPolicy": "length(8) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)",
   "smtpServer": {
     "host": "mailpit",
     "port": "1025",

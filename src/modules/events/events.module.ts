@@ -25,6 +25,7 @@ import { CreateEventCommentHandler } from './application/commands/create-event-c
 import { UpdateEventCommentHandler } from './application/commands/update-event-comment/update-event-comment.handler';
 import { DeleteEventCommentHandler } from './application/commands/delete-event-comment/delete-event-comment.handler';
 import { SearchEventsByLocationHandler } from './application/queries/search-events-by-location/search-events-by-location.handler';
+import { GetMapEventsHandler } from './application/queries/get-map-events/get-map-events.handler';
 import { GetEventByIdHandler } from './application/queries/get-event-by-id/get-event-by-id.handler';
 import { ListMyCreatedEventsHandler } from './application/queries/list-my-created-events/list-my-created-events.handler';
 import { ListMyAttendingEventsHandler } from './application/queries/list-my-attending-events/list-my-attending-events.handler';
@@ -60,6 +61,7 @@ const commandHandlers = [
 ];
 const queryHandlers = [
   SearchEventsByLocationHandler,
+  GetMapEventsHandler,
   GetEventByIdHandler,
   ListMyCreatedEventsHandler,
   ListMyAttendingEventsHandler,
