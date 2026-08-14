@@ -354,7 +354,7 @@ function mediaPublicUrl(): string {
 
 function coverSvg(category: EventCategory, variant: number): Buffer {
   const [first, second] = categoryColors[category];
-  const label = category.replaceAll('_AND_', ' & ').replaceAll('_', ' ');
+  const label = category.replaceAll('_AND_', ' &amp; ').replaceAll('_', ' ');
   return Buffer.from(`
     <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
       <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${first}"/><stop offset="1" stop-color="${second}"/></linearGradient></defs>
