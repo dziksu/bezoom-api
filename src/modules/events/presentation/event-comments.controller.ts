@@ -34,7 +34,7 @@ import {
 } from '../application/queries/list-event-social/list-event-social.queries';
 
 @ApiTags('Event social')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('events/:eventId')
 export class EventCommentsController {
   constructor(

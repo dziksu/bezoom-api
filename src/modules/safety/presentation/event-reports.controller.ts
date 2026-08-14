@@ -8,7 +8,7 @@ import { ReportEventCommand } from '../application/commands/report-event/report-
 import { EventReportResponseDto, ReportEventDto } from '../application/dto/safety.dto';
 
 @ApiTags('Safety')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('events')
 export class EventReportsController {
   constructor(private readonly commandBus: CommandBus) {}

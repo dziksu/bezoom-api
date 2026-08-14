@@ -11,7 +11,7 @@ import { CursorBlockedProfilesDto, UserBlockResponseDto } from '../application/d
 import { ListBlockedUsersQuery } from '../application/queries/list-blocked-users/list-blocked-users.query';
 
 @ApiTags('Safety')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('user/blocks')
 export class UserBlocksController {
   constructor(

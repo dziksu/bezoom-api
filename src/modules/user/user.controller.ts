@@ -26,7 +26,7 @@ import {
 } from './dto/profile.dto';
 
 @ApiTags('User Profile')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('user')
 export class UserController {
   constructor(private readonly profileService: ProfileService) {}

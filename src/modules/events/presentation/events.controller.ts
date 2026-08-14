@@ -49,7 +49,7 @@ import { ListMyLikedEventsQuery } from '../application/queries/list-my-liked-eve
 import { ListMySavedEventsQuery } from '../application/queries/list-my-saved-events/list-my-saved-events.query';
 
 @ApiTags('Events')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('events')
 export class EventsController {
   constructor(

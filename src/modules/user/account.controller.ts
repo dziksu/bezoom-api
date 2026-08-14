@@ -6,7 +6,7 @@ import { AccountLifecycleResponseDto } from './dto/account-lifecycle.dto';
 import { AccountLifecycleService } from './services/account-lifecycle.service';
 
 @ApiTags('Account lifecycle')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('user/account')
 @AllowInactiveAccount()
 export class AccountController {
