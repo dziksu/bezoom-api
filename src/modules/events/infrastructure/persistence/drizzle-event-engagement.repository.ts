@@ -7,7 +7,8 @@ import {
   eventSaves,
   eventParticipants,
   eventOutbox,
-  eventStats
+  eventStats,
+  profiles
 } from '@api/shared/infrastructure/database/schema';
 import {
   EventEngagementRepository,
@@ -36,7 +37,8 @@ export class DrizzleEventEngagementRepository extends EventEngagementRepository 
         mediaPipelineStatus: events.mediaPipelineStatus
       })
       .from(events)
-      .where(eq(events.id, eventId))
+      .innerJoin(profiles, eq(profiles.keycloakSub, events.organizerKeycloakSub))
+      .where(and(eq(events.id, eventId), eq(profiles.accountStatus, 'ACTIVE')))
       .limit(1);
 
     return rows[0] ?? null;

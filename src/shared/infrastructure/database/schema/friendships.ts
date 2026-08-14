@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { index, pgTable, uuid, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 export const friendships = pgTable(
   'friendships',
@@ -13,5 +13,8 @@ export const friendships = pgTable(
       .default('PENDING'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull()
   },
-  (t) => [uniqueIndex('friendships_keycloak_subs_idx').on(t.keycloakSub1, t.keycloakSub2)]
+  (t) => [
+    uniqueIndex('friendships_keycloak_subs_idx').on(t.keycloakSub1, t.keycloakSub2),
+    index('friendships_second_user_idx').on(t.keycloakSub2, t.createdAt.desc(), t.id.desc())
+  ]
 );

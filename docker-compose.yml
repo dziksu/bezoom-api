@@ -79,6 +79,15 @@ services:
       KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/bezoom/protocol/openid-connect/certs
       KEYCLOAK_ISSUER: http://localhost:${KEYCLOAK_HTTP_PORT:-8080}/realms/bezoom
       KEYCLOAK_CLIENT_ID: bezoom-api
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_PUBLIC_URL: http://localhost:${KEYCLOAK_HTTP_PORT:-8080}
+      KEYCLOAK_REALM: bezoom
+      KEYCLOAK_ACCOUNT_MANAGEMENT_CLIENT_ID: bezoom-account-lifecycle
+      KEYCLOAK_ACCOUNT_MANAGEMENT_CLIENT_SECRET: ${KEYCLOAK_ACCOUNT_MANAGEMENT_CLIENT_SECRET:-dev-bezoom-account-lifecycle-secret}
+      KEYCLOAK_ACCOUNT_CONSOLE_CLIENT_ID: bezoom-web
+      KEYCLOAK_ACCOUNT_RETURN_URL: ${KEYCLOAK_ACCOUNT_RETURN_URL:-http://localhost:3000/account}
+      ACCOUNT_DELETION_GRACE_DAYS: ${ACCOUNT_DELETION_GRACE_DAYS:-30}
+      ACCOUNT_DELETION_WORKER_INTERVAL_MS: ${ACCOUNT_DELETION_WORKER_INTERVAL_MS:-30000}
       OTEL_SERVICE_NAME: bezoom-api
     ports:
       - '${API_PORT:-4000}:4000'
@@ -94,6 +103,8 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_healthy
+      keycloak-config:
+        condition: service_completed_successfully
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://localhost:4000/api/health/ready >/dev/null || exit 1']
       interval: 10s
@@ -221,7 +232,7 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
 
   keycloak:
-    image: keycloak/keycloak:latest
+    image: keycloak/keycloak:26.7.1
     restart: unless-stopped
     command: start-dev --import-realm
     environment:
@@ -256,6 +267,22 @@ services:
       options:
         max-size: '10m'
         max-file: '3'
+
+  keycloak-config:
+    image: keycloak/keycloak:26.7.1
+    restart: 'no'
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-changeme}
+      KEYCLOAK_ACCOUNT_MANAGEMENT_CLIENT_SECRET: ${KEYCLOAK_ACCOUNT_MANAGEMENT_CLIENT_SECRET:-dev-bezoom-account-lifecycle-secret}
+    volumes:
+      - ./scripts/keycloak/configure-dev.sh:/opt/bezoom/configure-dev.sh:ro
+    entrypoint: ['/bin/bash', '/opt/bezoom/configure-dev.sh']
 
   # ───────────────────────────────────────────────────────────────────────────
   # EMAIL (local SMTP + web UI)

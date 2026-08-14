@@ -80,10 +80,24 @@ export class ProfileService {
   }
 
   /** Atomically provisions the personal profile on the first authenticated request. */
-  private async ensureProfile(keycloakSub: string, email?: string): Promise<ProfileRecord> {
+  private async ensureProfile(
+    keycloakSub: string,
+    email?: string,
+    firstName?: string,
+    lastName?: string,
+    identityIssuedAt?: number,
+    emailVerified?: boolean
+  ): Promise<ProfileRecord> {
     const [created] = await this.drizzleWrite.db
       .insert(profiles)
-      .values({ keycloakSub, email: email || null, accountType: 'personal' })
+      .values({
+        keycloakSub,
+        email: emailVerified === true ? email || null : null,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        identitySyncedAt: identityIssuedAt ? new Date(identityIssuedAt * 1_000) : null,
+        accountType: 'personal'
+      })
       .onConflictDoNothing({ target: profiles.keycloakSub })
       .returning();
     if (created) {
@@ -97,11 +111,27 @@ export class ProfileService {
       .where(eq(profiles.keycloakSub, keycloakSub))
       .limit(1);
     if (!existing) throw new NotFoundException('PROFILE_NOT_FOUND');
+    if (existing.accountStatus !== 'ACTIVE') throw new ConflictException('ACCOUNT_INACTIVE');
 
-    if (email && existing.email !== email) {
+    const tokenIssuedAt = identityIssuedAt ? new Date(identityIssuedAt * 1_000) : undefined;
+    const isNewerIdentity =
+      tokenIssuedAt !== undefined && (!existing.identitySyncedAt || tokenIssuedAt > existing.identitySyncedAt);
+    const identityChanged = Boolean(
+      isNewerIdentity &&
+      ((emailVerified === true && email !== undefined && existing.email !== email) ||
+        (firstName !== undefined && existing.firstName !== firstName) ||
+        (lastName !== undefined && existing.lastName !== lastName))
+    );
+    if (identityChanged) {
       const [synced] = await this.drizzleWrite.db
         .update(profiles)
-        .set({ email, updatedAt: new Date() })
+        .set({
+          email: emailVerified === true ? (email ?? existing.email) : existing.email,
+          firstName: firstName ?? existing.firstName,
+          lastName: lastName ?? existing.lastName,
+          identitySyncedAt: tokenIssuedAt,
+          updatedAt: new Date()
+        })
         .where(eq(profiles.keycloakSub, keycloakSub))
         .returning();
       return synced;
@@ -121,6 +151,7 @@ export class ProfileService {
     }
 
     const profile = result[0];
+    if (profile.accountStatus !== 'ACTIVE') throw new NotFoundException('PROFILE_NOT_FOUND');
     if (viewerKeycloakSub && (await this.userBlocks.isBlockedBetween(viewerKeycloakSub, profile.keycloakSub))) {
       throw new NotFoundException('PROFILE_NOT_FOUND');
     }
@@ -131,8 +162,17 @@ export class ProfileService {
   /**
    * Get authenticated user's profile
    */
-  async getMyProfile(keycloakSub: string, email?: string): Promise<ProfileResponseDto> {
-    return this.toResponseDto(await this.ensureProfile(keycloakSub, email));
+  async getMyProfile(
+    keycloakSub: string,
+    email?: string,
+    firstName?: string,
+    lastName?: string,
+    identityIssuedAt?: number,
+    emailVerified?: boolean
+  ): Promise<ProfileResponseDto> {
+    return this.toResponseDto(
+      await this.ensureProfile(keycloakSub, email, firstName, lastName, identityIssuedAt, emailVerified)
+    );
   }
 
   /**
@@ -180,16 +220,22 @@ export class ProfileService {
   /**
    * Update personal profile
    */
-  async updateProfile(keycloakSub: string, updateDto: UpdateProfileDto, email?: string): Promise<ProfileResponseDto> {
-    const profile = await this.ensureProfile(keycloakSub, email);
+  async updateProfile(
+    keycloakSub: string,
+    updateDto: UpdateProfileDto,
+    email?: string,
+    firstName?: string,
+    lastName?: string,
+    identityIssuedAt?: number,
+    emailVerified?: boolean
+  ): Promise<ProfileResponseDto> {
+    const profile = await this.ensureProfile(keycloakSub, email, firstName, lastName, identityIssuedAt, emailVerified);
 
     let updated: ProfileRecord;
     try {
       [updated] = await this.drizzleWrite.db
         .update(profiles)
         .set({
-          firstName: updateDto.firstName ?? profile.firstName,
-          lastName: updateDto.lastName ?? profile.lastName,
           username: updateDto.username ?? profile.username,
           bio: updateDto.bio ?? profile.bio,
           interests: updateDto.interests ?? profile.interests,
@@ -210,8 +256,16 @@ export class ProfileService {
   /**
    * Upload avatar
    */
-  async uploadAvatar(keycloakSub: string, file: Express.Multer.File, email?: string): Promise<ProfileResponseDto> {
-    const profile = await this.ensureProfile(keycloakSub, email);
+  async uploadAvatar(
+    keycloakSub: string,
+    file: Express.Multer.File,
+    email?: string,
+    firstName?: string,
+    lastName?: string,
+    identityIssuedAt?: number,
+    emailVerified?: boolean
+  ): Promise<ProfileResponseDto> {
+    const profile = await this.ensureProfile(keycloakSub, email, firstName, lastName, identityIssuedAt, emailVerified);
     if (file.size > AVATAR_MAX_BYTES) {
       throw new BadRequestException({ code: 'FILE_SIZE_EXCEEDED', details: { maxBytes: AVATAR_MAX_BYTES } });
     }
@@ -247,8 +301,15 @@ export class ProfileService {
   /**
    * Delete avatar
    */
-  async deleteAvatar(keycloakSub: string, email?: string): Promise<ProfileResponseDto> {
-    const profile = await this.ensureProfile(keycloakSub, email);
+  async deleteAvatar(
+    keycloakSub: string,
+    email?: string,
+    firstName?: string,
+    lastName?: string,
+    identityIssuedAt?: number,
+    emailVerified?: boolean
+  ): Promise<ProfileResponseDto> {
+    const profile = await this.ensureProfile(keycloakSub, email, firstName, lastName, identityIssuedAt, emailVerified);
 
     const [updated] = await this.drizzleWrite.db
       .update(profiles)
@@ -359,9 +420,13 @@ export class ProfileService {
   async requestPhoneVerification(
     keycloakSub: string,
     requestDto: RequestPhoneVerificationDto,
-    email?: string
+    email?: string,
+    firstName?: string,
+    lastName?: string,
+    identityIssuedAt?: number,
+    emailVerified?: boolean
   ): Promise<{ status: 'PHONE_VERIFICATION_CODE_SENT'; expiresInSeconds: number }> {
-    const profile = await this.ensureProfile(keycloakSub, email);
+    const profile = await this.ensureProfile(keycloakSub, email, firstName, lastName, identityIssuedAt, emailVerified);
     const now = new Date();
 
     if (
@@ -435,8 +500,16 @@ export class ProfileService {
   /**
    * Verify phone number
    */
-  async verifyPhone(keycloakSub: string, verifyDto: VerifyPhoneDto, email?: string): Promise<ProfileResponseDto> {
-    const profile = await this.ensureProfile(keycloakSub, email);
+  async verifyPhone(
+    keycloakSub: string,
+    verifyDto: VerifyPhoneDto,
+    email?: string,
+    firstName?: string,
+    lastName?: string,
+    identityIssuedAt?: number,
+    emailVerified?: boolean
+  ): Promise<ProfileResponseDto> {
+    const profile = await this.ensureProfile(keycloakSub, email, firstName, lastName, identityIssuedAt, emailVerified);
 
     if (!profile.phoneVerificationToken) {
       throw new BadRequestException('PHONE_VERIFICATION_NOT_REQUESTED');
@@ -564,6 +637,7 @@ export class ProfileService {
       followingCount: profile.followingCount,
       isPrivate: profile.isPrivate,
       onboardingCompleted: Boolean(profile.username),
+      accountStatus: profile.accountStatus,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt
     };

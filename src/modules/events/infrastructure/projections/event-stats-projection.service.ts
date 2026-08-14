@@ -1,4 +1,4 @@
-import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { sql } from 'drizzle-orm';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
@@ -12,10 +12,11 @@ import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.
  * multiple projector replicas to work concurrently.
  */
 @Injectable()
-export class EventStatsProjectionService implements OnApplicationBootstrap, OnApplicationShutdown {
+export class EventStatsProjectionService implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(EventStatsProjectionService.name);
   private timer?: NodeJS.Timeout;
-  private running = false;
+  private inFlight?: Promise<void>;
+  private shuttingDown = false;
 
   constructor(
     private readonly writeService: DrizzleWriteService,
@@ -26,20 +27,27 @@ export class EventStatsProjectionService implements OnApplicationBootstrap, OnAp
     const configured = Number(process.env.EVENT_STATS_PROJECTION_INTERVAL_MS ?? 250);
     const intervalMs = Number.isFinite(configured) ? Math.max(50, configured) : 250;
 
-    void this.tick();
-    this.timer = setInterval(() => void this.tick(), intervalMs);
+    this.triggerTick();
+    this.timer = setInterval(() => this.triggerTick(), intervalMs);
     this.timer.unref();
   }
 
-  onApplicationShutdown(): void {
+  async onModuleDestroy(): Promise<void> {
+    this.shuttingDown = true;
     if (this.timer) clearInterval(this.timer);
+    await this.inFlight;
+  }
+
+  private triggerTick(): void {
+    if (this.shuttingDown || this.inFlight) return;
+    const task = this.tick();
+    this.inFlight = task;
+    void task.finally(() => {
+      if (this.inFlight === task) this.inFlight = undefined;
+    });
   }
 
   private async tick(): Promise<void> {
-    // Avoid overlapping batches in one process. SKIP LOCKED coordinates replicas.
-    if (this.running) return;
-    this.running = true;
-
     try {
       let projected: number;
       do {
@@ -47,8 +55,6 @@ export class EventStatsProjectionService implements OnApplicationBootstrap, OnAp
       } while (projected === 100);
     } catch (error) {
       this.logger.error('EVENT_STATS_PROJECTION_FAILED', error instanceof Error ? error.stack : undefined);
-    } finally {
-      this.running = false;
     }
   }
 

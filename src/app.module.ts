@@ -7,6 +7,7 @@ import authConfig from './shared/infrastructure/config/auth.config';
 import throttleConfig from './shared/infrastructure/config/throttle.config';
 import eventPipelineConfig from './shared/infrastructure/config/event-pipeline.config';
 import phoneDeliveryConfig from './shared/infrastructure/config/phone-delivery.config';
+import accountLifecycleConfig from './shared/infrastructure/config/account-lifecycle.config';
 import { DrizzleModule } from './shared/infrastructure/drizzle.module';
 import { StorageModule } from './shared/infrastructure/storage/storage.module';
 import { HealthModule } from './modules/health/health.module';
@@ -30,7 +31,8 @@ import { SafetyModule } from './modules/safety/safety.module';
         authConfig,
         throttleConfig,
         eventPipelineConfig,
-        phoneDeliveryConfig
+        phoneDeliveryConfig,
+        accountLifecycleConfig
       ],
       envFilePath: ['.env.local', '.env']
     }),

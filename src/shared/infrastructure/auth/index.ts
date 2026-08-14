@@ -3,3 +3,4 @@ export * from './decorators/authorization.decorators';
 export * from './decorators/current-user.decorator';
 export * from './decorators/public.decorator';
 export * from './decorators/optional-auth.decorator';
+export * from './decorators/allow-inactive-account.decorator';

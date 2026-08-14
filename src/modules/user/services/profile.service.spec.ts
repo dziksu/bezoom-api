@@ -6,9 +6,59 @@ import type { PhoneVerificationMessage } from './phone-verification-delivery';
 describe('ProfileService phone verification', () => {
   afterEach(() => jest.restoreAllMocks());
 
+  it('never persists an email claim before Keycloak marks it as verified', async () => {
+    let inserted: Record<string, unknown> = {};
+    const createdAt = new Date('2026-01-01T00:00:00.000Z');
+    const insert = jest.fn(() => ({
+      values: (values: Record<string, unknown>) => {
+        inserted = values;
+        return {
+          onConflictDoNothing: () => ({
+            returning: jest.fn().mockResolvedValue([
+              {
+                id: 'a6388e66-369b-49ea-a6fe-d7ff8b97185f',
+                ...values,
+                accountType: 'personal',
+                accountStatus: 'ACTIVE',
+                isPhoneVerified: false,
+                followersCount: 0,
+                followingCount: 0,
+                isPrivate: false,
+                createdAt,
+                updatedAt: createdAt
+              }
+            ])
+          })
+        };
+      }
+    }));
+    const service = new ProfileService(
+      { db: { insert } } as never,
+      {} as never,
+      {} as never,
+      new ConfigService(),
+      {} as never,
+      {} as never
+    );
+
+    const result = await service.getMyProfile(
+      'user-with-pending-email',
+      'pending@example.com',
+      'Pending',
+      'User',
+      1_786_680_000,
+      false
+    );
+
+    expect(inserted.email).toBeNull();
+    expect(result.email).toBeUndefined();
+    expect(result).toMatchObject({ firstName: 'Pending', lastName: 'User' });
+  });
+
   it('persists only a hash with expiry and never logs the OTP', async () => {
     const profile = {
       keycloakSub: 'user-1',
+      accountStatus: 'ACTIVE',
       email: 'user@example.com',
       phoneVerificationSentAt: null
     };
@@ -66,6 +116,7 @@ describe('ProfileService phone verification', () => {
       id: 'f3296b7d-3a11-4c9d-8755-0df8fe781748',
       keycloakSub: 'private-idp-subject',
       accountType: 'personal',
+      accountStatus: 'ACTIVE',
       firstName: 'Jan',
       lastName: 'Kowalski',
       username: 'jan',

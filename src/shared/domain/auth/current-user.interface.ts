@@ -5,6 +5,11 @@ export interface ICurrentUser {
   id: string;
   email?: string;
   username?: string;
+  firstName?: string;
+  lastName?: string;
+  authTime?: number;
+  issuedAt?: number;
+  emailVerified?: boolean;
   roles: AppRole[];
   permissions: AppPermission[];
 }

@@ -6,6 +6,10 @@ import { StorageModule } from '../../shared/infrastructure/storage/storage.modul
 import { PhoneVerificationDelivery } from './services/phone-verification-delivery';
 import { DevelopmentEmailPhoneVerificationDelivery } from './infrastructure/development-email-phone-verification.delivery';
 import { SafetyModule } from '../safety/safety.module';
+import { AccountController } from './account.controller';
+import { AccountLifecycleService } from './services/account-lifecycle.service';
+import { KeycloakAccountManagementService } from './infrastructure/keycloak-account-management.service';
+import { AccountDeletionWorker } from './services/account-deletion.worker';
 
 /**
  * UserModule
@@ -17,9 +21,12 @@ import { SafetyModule } from '../safety/safety.module';
  */
 @Module({
   imports: [DrizzleModule, StorageModule, SafetyModule],
-  controllers: [UserController],
+  controllers: [UserController, AccountController],
   providers: [
     ProfileService,
+    AccountLifecycleService,
+    AccountDeletionWorker,
+    KeycloakAccountManagementService,
     DevelopmentEmailPhoneVerificationDelivery,
     { provide: PhoneVerificationDelivery, useExisting: DevelopmentEmailPhoneVerificationDelivery }
   ],

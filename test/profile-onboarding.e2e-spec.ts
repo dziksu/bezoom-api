@@ -34,7 +34,9 @@ describe('Personal profile onboarding (e2e)', () => {
         verify: jest.fn(() => ({
           sub: userSub,
           email,
+          email_verified: true,
           preferred_username: 'idp-name-is-not-the-profile-nick',
+          iat: Math.floor(Date.now() / 1_000),
           typ: 'Bearer',
           aud: ['bezoom-api']
         }))

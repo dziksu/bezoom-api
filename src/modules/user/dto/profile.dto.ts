@@ -19,22 +19,6 @@ import { ApiProperty, PartialType } from '@nestjs/swagger';
  * Allows users to update their personal profile information
  */
 export class UpdateProfileDto {
-  @ApiProperty({ example: 'John', required: false })
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(50)
-  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
-  firstName?: string;
-
-  @ApiProperty({ example: 'Doe', required: false })
-  @IsOptional()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(50)
-  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
-  lastName?: string;
-
   @ApiProperty({ example: 'john_doe', required: false })
   @IsOptional()
   @IsString()
@@ -209,6 +193,9 @@ export class ProfileResponseDto {
 
   @ApiProperty({ description: 'True after the user has chosen a unique public username.' })
   onboardingCompleted: boolean;
+
+  @ApiProperty({ enum: ['ACTIVE', 'DEACTIVATED', 'PENDING_DELETION', 'ANONYMIZED'] })
+  accountStatus: 'ACTIVE' | 'DEACTIVATED' | 'PENDING_DELETION' | 'ANONYMIZED';
 
   @ApiProperty()
   createdAt: Date;

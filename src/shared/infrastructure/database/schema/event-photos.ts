@@ -22,6 +22,7 @@ export const eventPhotos = pgTable(
   },
   (t) => [
     index('event_photos_event_id_idx').on(t.eventId),
+    index('event_photos_owner_event_idx').on(t.ownerKeycloakSub, t.eventId),
     index('event_photos_ready_position_idx').on(t.eventId, t.status, t.position)
   ]
 );

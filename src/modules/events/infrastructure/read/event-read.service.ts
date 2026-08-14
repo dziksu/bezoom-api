@@ -60,6 +60,11 @@ export class EventReadService {
           eq(events.verificationStatus, 'VERIFIED'),
           eq(events.visibility, 'PUBLIC'),
           isNull(events.archivedAt),
+          sql`EXISTS (
+            SELECT 1 FROM ${profiles} organizer
+            WHERE organizer.keycloak_sub = ${events.organizerKeycloakSub}
+              AND organizer.account_status = 'ACTIVE'
+          )`,
           viewerKeycloakSub
             ? sql`NOT EXISTS (
                 SELECT 1 FROM ${userBlocks} block

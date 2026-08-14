@@ -21,6 +21,7 @@ export const profiles = pgTable(
     lastName: text('last_name'),
     username: text('username').unique(), // Optional unique username
     email: text('email'),
+    identitySyncedAt: timestamp('identity_synced_at', { withTimezone: true, precision: 3 }),
     phoneNumber: text('phone_number'), // Verified phone number
 
     // Profile content
@@ -53,6 +54,11 @@ export const profiles = pgTable(
     followingCount: integer('following_count').notNull().default(0),
 
     // Account settings
+    accountStatus: text('account_status', {
+      enum: ['ACTIVE', 'DEACTIVATED', 'PENDING_DELETION', 'ANONYMIZED']
+    })
+      .notNull()
+      .default('ACTIVE'),
     isPrivate: boolean('is_private').notNull().default(false),
     isDeactivated: boolean('is_deactivated').notNull().default(false),
 
@@ -62,6 +68,10 @@ export const profiles = pgTable(
   },
   (table) => [
     check('profiles_username_format_check', sql`${table.username} IS NULL OR ${table.username} ~ '^[a-z0-9_-]{3,20}$'`),
+    check(
+      'profiles_account_status_check',
+      sql`${table.accountStatus} IN ('ACTIVE', 'DEACTIVATED', 'PENDING_DELETION', 'ANONYMIZED')`
+    ),
     uniqueIndex('profiles_username_lower_unique')
       .on(sql`lower(${table.username})`)
       .where(sql`${table.username} IS NOT NULL`)

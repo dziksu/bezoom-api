@@ -7,7 +7,7 @@
   "registrationAllowed": true,
   "registrationEmailAsUsername": true,
   "resetPasswordAllowed": true,
-  "verifyEmail": false,
+  "verifyEmail": true,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "editUsernameAllowed": false,
@@ -34,6 +34,34 @@
   "refreshTokenMaxReuse": 0,
 
   "defaultSignatureAlgorithm": "RS256",
+  "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)",
+  "smtpServer": {
+    "host": "mailpit",
+    "port": "1025",
+    "from": "noreply@bezoom.local",
+    "fromDisplayName": "Bezoom Dev",
+    "auth": "false",
+    "ssl": "false",
+    "starttls": "false"
+  },
+  "requiredActions": [
+    {
+      "alias": "UPDATE_EMAIL",
+      "name": "Update Email",
+      "providerId": "UPDATE_EMAIL",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 70
+    },
+    {
+      "alias": "delete_account",
+      "name": "Delete Account",
+      "providerId": "delete_account",
+      "enabled": false,
+      "defaultAction": false,
+      "priority": 80
+    }
+  ],
 
   "roles": {
     "realm": [
@@ -113,7 +141,7 @@
       "clientAuthenticatorType": "client-secret",
       "secret": "dev-bezoom-api-secret",
 
-      "serviceAccountsEnabled": true,
+      "serviceAccountsEnabled": false,
 
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
@@ -122,10 +150,32 @@
       "defaultClientScopes": ["roles"],
 
       "optionalClientScopes": ["offline_access"]
+    },
+    {
+      "clientId": "bezoom-account-lifecycle",
+      "name": "Bezoom Account Lifecycle Worker",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-bezoom-account-lifecycle-secret",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "defaultClientScopes": ["roles"]
     }
   ],
 
   "users": [
+    {
+      "username": "service-account-bezoom-account-lifecycle",
+      "enabled": true,
+      "serviceAccountClientId": "bezoom-account-lifecycle",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users"]
+      }
+    },
     {
       "username": "admin@bezoom.com",
       "email": "admin@bezoom.com",

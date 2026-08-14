@@ -71,6 +71,13 @@
       "when": 1786734000000,
       "tag": "0009_profile_onboarding_username",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786816800000,
+      "tag": "0010_account_lifecycle",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ export const eventOutbox = pgTable(
     attempts: integer('attempts').default(0).notNull()
   },
   (table) => [
+    index('event_outbox_aggregate_type_idx').on(table.aggregateId, table.eventType),
     index('event_outbox_pending_idx')
       .on(table.occurredAt)
       .where(sql`${table.processedAt} IS NULL`)

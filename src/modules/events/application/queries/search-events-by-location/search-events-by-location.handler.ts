@@ -90,7 +90,7 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
         FROM params p
         JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MVP_DISCOVERY_RADIUS_METERS})
         JOIN events e ON e.id = l.event_id
-        LEFT JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
+        JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
         WHERE e.status = 'PUBLISHED'
           AND e.verification_status = 'VERIFIED'
           AND e.visibility = 'PUBLIC'
@@ -98,6 +98,7 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           AND e.radius_km = ${MVP_EVENT_REACH_RADIUS_KM}
           AND e.archived_at IS NULL
           AND e.start_date > now()
+          AND organizer.account_status = 'ACTIVE'
           AND (
             ${query.viewerKeycloakSub ?? null}::text IS NULL
             OR NOT EXISTS (

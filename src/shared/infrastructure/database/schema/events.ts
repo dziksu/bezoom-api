@@ -89,6 +89,7 @@ export const events = pgTable(
     index('events_organizer_created_idx')
       .on(table.organizerKeycloakSub, table.createdAt.desc(), table.id.desc())
       .where(sql`${table.archivedAt} IS NULL`),
+    index('events_organizer_all_created_idx').on(table.organizerKeycloakSub, table.createdAt.desc(), table.id.desc()),
     index('events_public_discovery_start_idx')
       .on(table.startDate, table.id)
       .where(

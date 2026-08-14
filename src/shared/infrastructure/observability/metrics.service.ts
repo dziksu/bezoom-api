@@ -39,7 +39,7 @@ export class MetricsService {
     this.httpDuration.observe(labels, durationSeconds);
   }
 
-  observeCacheOperation(cache: string, result: 'error' | 'hit' | 'miss' | 'write'): void {
+  observeCacheOperation(cache: string, result: 'delete' | 'error' | 'hit' | 'miss' | 'write'): void {
     this.cacheOperations.inc({ cache, result });
   }
 

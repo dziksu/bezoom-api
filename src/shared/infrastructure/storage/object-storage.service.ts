@@ -73,7 +73,7 @@ export class ObjectStorageService {
       if (code === 'NotFound' || code === 'NoSuchKey') {
         return null;
       }
-      this.logger.error(`statObject failed for ${bucket}/${key}: ${(error as Error).message}`);
+      this.logger.error('OBJECT_STORAGE_STAT_FAILED');
       throw error;
     }
   }

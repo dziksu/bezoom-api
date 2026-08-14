@@ -45,7 +45,14 @@ export class UserController {
   })
   @Get('profile')
   async getProfile(@CurrentUser() user: ICurrentUser) {
-    return this.profileService.getMyProfile(user.id, user.email);
+    return this.profileService.getMyProfile(
+      user.id,
+      user.email,
+      user.firstName,
+      user.lastName,
+      user.issuedAt,
+      user.emailVerified
+    );
   }
 
   /**
@@ -71,7 +78,8 @@ export class UserController {
    */
   @ApiOperation({
     summary: 'Update user profile',
-    description: 'Update personal profile information (name, bio, interests, etc.)'
+    description:
+      'Update Bezoom profile data (nick, bio, interests and privacy). Email, first name, last name, password, MFA and sessions are managed by Keycloak Account Console.'
   })
   @ApiResponse({
     status: 200,
@@ -81,7 +89,15 @@ export class UserController {
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @Patch('profile')
   async updateProfile(@CurrentUser() user: ICurrentUser, @Body() updateDto: UpdateProfileDto) {
-    return this.profileService.updateProfile(user.id, updateDto, user.email);
+    return this.profileService.updateProfile(
+      user.id,
+      updateDto,
+      user.email,
+      user.firstName,
+      user.lastName,
+      user.issuedAt,
+      user.emailVerified
+    );
   }
 
   /**
@@ -124,7 +140,15 @@ export class UserController {
     if (!file) {
       throw new BadRequestException('AVATAR_FILE_REQUIRED');
     }
-    return this.profileService.uploadAvatar(user.id, file, user.email);
+    return this.profileService.uploadAvatar(
+      user.id,
+      file,
+      user.email,
+      user.firstName,
+      user.lastName,
+      user.issuedAt,
+      user.emailVerified
+    );
   }
 
   /**
@@ -141,7 +165,14 @@ export class UserController {
   })
   @Delete('profile/avatar')
   async deleteAvatar(@CurrentUser() user: ICurrentUser) {
-    return this.profileService.deleteAvatar(user.id, user.email);
+    return this.profileService.deleteAvatar(
+      user.id,
+      user.email,
+      user.firstName,
+      user.lastName,
+      user.issuedAt,
+      user.emailVerified
+    );
   }
 
   /**
@@ -162,7 +193,15 @@ export class UserController {
     { name: 'phone_otp_request_ip', limit: 30, windowSeconds: 3600, scopes: ['ip'] }
   )
   async requestPhoneVerification(@CurrentUser() user: ICurrentUser, @Body() requestDto: RequestPhoneVerificationDto) {
-    return this.profileService.requestPhoneVerification(user.id, requestDto, user.email);
+    return this.profileService.requestPhoneVerification(
+      user.id,
+      requestDto,
+      user.email,
+      user.firstName,
+      user.lastName,
+      user.issuedAt,
+      user.emailVerified
+    );
   }
 
   /**
@@ -184,7 +223,15 @@ export class UserController {
     { name: 'phone_otp_verify_ip', limit: 100, windowSeconds: 600, scopes: ['ip'] }
   )
   async verifyPhone(@CurrentUser() user: ICurrentUser, @Body() verifyDto: VerifyPhoneDto) {
-    return this.profileService.verifyPhone(user.id, verifyDto, user.email);
+    return this.profileService.verifyPhone(
+      user.id,
+      verifyDto,
+      user.email,
+      user.firstName,
+      user.lastName,
+      user.issuedAt,
+      user.emailVerified
+    );
   }
 
   /**

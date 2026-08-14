@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import { inArray, sql } from 'drizzle-orm';
@@ -16,10 +16,11 @@ interface ClaimedOutboxRow {
 
 /** Reliably bridges the PostgreSQL outbox to BullMQ. Job IDs make retries idempotent. */
 @Injectable()
-export class EventPipelineOutboxDispatcher implements OnApplicationBootstrap, OnApplicationShutdown {
+export class EventPipelineOutboxDispatcher implements OnApplicationBootstrap, OnModuleDestroy {
   private readonly logger = new Logger(EventPipelineOutboxDispatcher.name);
   private timer?: NodeJS.Timeout;
-  private running = false;
+  private inFlight?: Promise<void>;
+  private shuttingDown = false;
 
   constructor(
     private readonly writeService: DrizzleWriteService,
@@ -31,13 +32,15 @@ export class EventPipelineOutboxDispatcher implements OnApplicationBootstrap, On
     const pipeline = this.config.get<EventPipelineConfig>('eventPipeline');
     if (pipeline?.mode !== 'development_passthrough') return;
     const intervalMs = pipeline?.dispatchIntervalMs ?? 500;
-    void this.tick();
-    this.timer = setInterval(() => void this.tick(), intervalMs);
+    this.triggerTick();
+    this.timer = setInterval(() => this.triggerTick(), intervalMs);
     this.timer.unref();
   }
 
-  onApplicationShutdown(): void {
+  async onModuleDestroy(): Promise<void> {
+    this.shuttingDown = true;
     if (this.timer) clearInterval(this.timer);
+    await this.inFlight;
   }
 
   async dispatchNextBatch(limit = 25): Promise<number> {
@@ -81,9 +84,16 @@ export class EventPipelineOutboxDispatcher implements OnApplicationBootstrap, On
     });
   }
 
+  private triggerTick(): void {
+    if (this.shuttingDown || this.inFlight) return;
+    const task = this.tick();
+    this.inFlight = task;
+    void task.finally(() => {
+      if (this.inFlight === task) this.inFlight = undefined;
+    });
+  }
+
   private async tick(): Promise<void> {
-    if (this.running) return;
-    this.running = true;
     try {
       let dispatched: number;
       do {
@@ -91,8 +101,6 @@ export class EventPipelineOutboxDispatcher implements OnApplicationBootstrap, On
       } while (dispatched === 25);
     } catch (error) {
       this.logger.error('EVENT_PIPELINE_DISPATCH_FAILED', error instanceof Error ? error.stack : undefined);
-    } finally {
-      this.running = false;
     }
   }
 }

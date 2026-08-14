@@ -80,6 +80,19 @@ Pierwsze `GET /api/user/profile` atomowo zakłada bezpłatny profil osobisty. Od
 
 Avatar jest opcjonalny i można go dodać podczas onboardingu lub później przez `POST /api/user/profile/avatar`. Obraz trafia do MinIO lokalnie i do S3-compatible storage docelowo; API weryfikuje limit 5 MiB, deklarowany MIME oraz sygnaturę JPEG/PNG/WebP. Numer telefonu nie jest częścią podstawowego onboardingu. Użytkownik potrzebuje zweryfikowanego telefonu dopiero przed pobraniem URL-i uploadu zdjęć i rozpoczęciem tworzenia eventu.
 
+## Zarządzanie kontem i usunięcie danych
+
+`GET /api/user/account` zwraca stan konta oraz URL Keycloak Account Console. Keycloak jest jedynym miejscem zmiany emaila, hasła, MFA/WebAuthn, aktywnych sesji i powiązanych dostawców tożsamości. `PATCH /api/user/profile` modyfikuje wyłącznie dane domenowe BeZoom: nick, bio, zainteresowania i prywatność. Imię, nazwisko i zweryfikowany email są synchronizowane wyłącznie z nowszego tokenu Keycloak, więc stary token nie cofnie zmiany emaila.
+
+- `POST /api/user/account/deactivate` — odwracalna deaktywacja i wylogowanie sesji Keycloak;
+- `POST /api/user/account/reactivate` — reaktywacja po ponownym uwierzytelnieniu;
+- `DELETE /api/user/account` — idempotentne zaplanowanie usunięcia za 30 dni;
+- `POST /api/user/account/deletion/cancel` — anulowanie przed rozpoczęciem anonimizacji.
+
+Operacje wymagają `auth_time` nie starszego niż 5 minut. Globalny guard natychmiast blokuje zwykłe API dla `DEACTIVATED`, `PENDING_DELETION` i `ANONYMIZED`, również przy nadal ważnym access tokenie. Worker po okresie karencji usuwa PII profilu, telefon i OTP, avatar oraz prywatne raw uploads, usuwa engagement/relacje/notyfikacje, soft-delete'uje komentarze autora, archiwizuje jego eventy i koryguje liczniki przez transactional outbox. Następnie usuwa identity w Keycloak i zastępuje pozostałe techniczne odwołania nieodwracalnym tombstone. Hash starego subjectu pozostaje wyłącznie jako erasure ledger zapobiegający odtworzeniu profilu przez stary JWT.
+
+Bezpośredni `delete_account` w Keycloak pozostaje wyłączony, ponieważ nie obejmuje danych domenowych BeZoom. Lokalny Compose uruchamia idempotentny `keycloak-config`, który włącza SMTP Mailpit, weryfikację emaila, `UPDATE_EMAIL`, politykę hasła i dedykowany service account o minimalnych rolach `manage-users`/`view-users`.
+
 ## Zasady publikacji eventu
 
 Nowy event nie staje się publiczny automatycznie. Przechodzi przez upload, moderację/weryfikację i przygotowanie mediów. Feed, wyszukiwanie, szczegóły oraz engagement dopuszczają tylko eventy publiczne, opublikowane, zweryfikowane i z mediami `READY`. Promień MVP wynosi stałe 5 km i nie może zostać kupiony ani ustawiony przez klienta.

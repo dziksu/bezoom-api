@@ -53,6 +53,22 @@ export class RedisCacheService implements OnModuleDestroy {
     }
   }
 
+  async clearNamespace(namespace: string): Promise<void> {
+    try {
+      await this.ensureConnected();
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', `bezoom:${namespace}:*`, 'COUNT', 100);
+        cursor = nextCursor;
+        if (keys.length > 0) await this.redis.unlink(...keys);
+      } while (cursor !== '0');
+      this.metrics.observeCacheOperation(namespace, 'delete');
+    } catch {
+      this.metrics.observeCacheOperation(namespace, 'error');
+      this.logger.warn('CACHE_NAMESPACE_DELETE_FAILED');
+    }
+  }
+
   onModuleDestroy(): void {
     this.redis.disconnect();
   }
