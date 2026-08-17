@@ -1,4 +1,5 @@
 export { profiles } from './profiles';
+export { userSettings } from './user-settings';
 export { accountDeletions } from './account-deletions';
 export { accountDeletionObjects } from './account-deletion-objects';
 export { events } from './events';

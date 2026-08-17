@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { Client as MinioClient } from 'minio';
 import { Client, type PoolClient, type QueryResult } from 'pg';
 import {
   categories,
@@ -98,21 +97,82 @@ const scales: Record<ScaleName, ScaleDefinition> = {
   }
 };
 
-const categoryColors: Record<EventCategory, [string, string]> = {
-  ARTS_AND_CULTURE: ['#7c3aed', '#ec4899'],
-  ENTERTAINMENT: ['#f97316', '#ef4444'],
-  SPORT_AND_RECREATION: ['#16a34a', '#14b8a6'],
-  EDUCATION_AND_DEVELOPMENT: ['#2563eb', '#06b6d4'],
-  SOCIAL_MEETUPS: ['#db2777', '#f59e0b'],
-  FESTIVALS_AND_FAIRS: ['#9333ea', '#f97316'],
-  TRADE_AND_MARKETS: ['#0f766e', '#84cc16'],
-  FAMILY_AND_KIDS: ['#0284c7', '#eab308'],
-  BUSINESS_AND_CAREER: ['#334155', '#2563eb'],
-  COMMUNITY_AND_ACTIVISM: ['#15803d', '#65a30d'],
-  MUSIC_AND_NIGHTLIFE: ['#111827', '#8b5cf6'],
-  HEALTH_AND_WELLNESS: ['#0d9488', '#22c55e'],
-  FOOD_AND_CULINARY: ['#b45309', '#dc2626']
+const eventPhotoIds: Record<EventCategory, readonly [string, string, string]> = {
+  ARTS_AND_CULTURE: [
+    'photo-1549490349-8643362247b5',
+    'photo-1561214115-f2f134cc4912',
+    'photo-1579783902614-a3fb3927b6a5'
+  ],
+  ENTERTAINMENT: [
+    'photo-1501386761578-eac5c94b800a',
+    'photo-1488841714725-bb4c32d1ac94',
+    'photo-1496337589254-7e19d01cec44'
+  ],
+  SPORT_AND_RECREATION: [
+    'photo-1538805060514-97d9cc17730c',
+    'photo-1517836357463-d25dfeac3438',
+    'photo-1571019613454-1cb2f99b2d8b'
+  ],
+  EDUCATION_AND_DEVELOPMENT: [
+    'photo-1524178232363-1fb2b075b655',
+    'photo-1523240795612-9a054b0db644',
+    'photo-1516321318423-f06f85e504b3'
+  ],
+  SOCIAL_MEETUPS: [
+    'photo-1529156069898-49953e39b3ac',
+    'photo-1511632765486-a01980e01a18',
+    'photo-1528605248644-14dd04022da1'
+  ],
+  FESTIVALS_AND_FAIRS: [
+    'photo-1492684223066-81342ee5ff30',
+    'photo-1533174072545-7a4b6ad7a6c3',
+    'photo-1506157786151-b8491531f063'
+  ],
+  TRADE_AND_MARKETS: [
+    'photo-1488459716781-31db52582fe9',
+    'photo-1501339847302-ac426a4a7cbb',
+    'photo-1441986300917-64674bd600d8'
+  ],
+  FAMILY_AND_KIDS: [
+    'photo-1504151932400-72d4384f04b3',
+    'photo-1529390079861-591de354faf5',
+    'photo-1472162072942-cd5147eb3902'
+  ],
+  BUSINESS_AND_CAREER: [
+    'photo-1556761175-b413da4baf72',
+    'photo-1521737711867-e3b97375f902',
+    'photo-1551836022-d5d88e9218df'
+  ],
+  COMMUNITY_AND_ACTIVISM: [
+    'photo-1559027615-cd4628902d4a',
+    'photo-1542810634-71277d95dcbb',
+    'photo-1469571486292-0ba58a3f068b'
+  ],
+  MUSIC_AND_NIGHTLIFE: [
+    'photo-1514525253161-7a46d19cd819',
+    'photo-1524368535928-5b5e00ddc76b',
+    'photo-1493225457124-a3eb161ffa5f'
+  ],
+  HEALTH_AND_WELLNESS: [
+    'photo-1544367567-0f2fcb009e0b',
+    'photo-1518611012118-696072aa579a',
+    'photo-1506126613408-eca07ce68773'
+  ],
+  FOOD_AND_CULINARY: [
+    'photo-1504674900247-0877df9cc836',
+    'photo-1498837167922-ddd27525d352',
+    'photo-1556910103-1c02745aae4d'
+  ]
 };
+
+function eventPhotoUrl(category: EventCategory, variant: number): string {
+  const photoId = eventPhotoIds[category][variant % eventPhotoIds[category].length];
+  return `https://images.unsplash.com/${photoId}?fm=jpg&fit=crop&w=1200&h=675&q=82`;
+}
+
+function avatarPhotoUrl(index: number): string {
+  return `https://i.pravatar.cc/256?img=${(index % 70) + 1}`;
+}
 
 function parseOptions(argv: string[]): SeedOptions {
   const valueOf = (name: string): string | undefined => {
@@ -366,82 +426,8 @@ async function cleanPreviousSeed(client: Client): Promise<void> {
   `);
 }
 
-function mediaPublicUrl(): string {
-  return (process.env.MINIO_PUBLIC_URL ?? 'http://localhost:9000').replace(/\/$/, '');
-}
-
-function coverSvg(category: EventCategory, variant: number): Buffer {
-  const [first, second] = categoryColors[category];
-  const label = category.replaceAll('_AND_', ' &amp; ').replaceAll('_', ' ');
-  return Buffer.from(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
-      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${first}"/><stop offset="1" stop-color="${second}"/></linearGradient></defs>
-      <rect width="1200" height="675" rx="36" fill="url(#g)"/>
-      <circle cx="${180 + variant * 130}" cy="130" r="210" fill="#fff" opacity=".09"/>
-      <circle cx="1030" cy="580" r="310" fill="#fff" opacity=".08"/>
-      <path d="M0 ${500 - variant * 25} Q300 360 600 510 T1200 430 V675 H0Z" fill="#fff" opacity=".1"/>
-      <text x="72" y="485" fill="#fff" font-family="system-ui,sans-serif" font-size="28" font-weight="600" opacity=".82">BEZOOM • POLSKA</text>
-      <text x="72" y="550" fill="#fff" font-family="system-ui,sans-serif" font-size="48" font-weight="800">${label}</text>
-    </svg>
-  `);
-}
-
-function avatarSvg(index: number): Buffer {
-  const palettes = Object.values(categoryColors);
-  const [first, second] = palettes[index % palettes.length];
-  return Buffer.from(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-      <defs><linearGradient id="a" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${first}"/><stop offset="1" stop-color="${second}"/></linearGradient></defs>
-      <rect width="256" height="256" rx="128" fill="url(#a)"/>
-      <circle cx="128" cy="100" r="44" fill="#fff" opacity=".9"/>
-      <path d="M48 232c8-58 38-86 80-86s72 28 80 86" fill="#fff" opacity=".9"/>
-    </svg>
-  `);
-}
-
-async function uploadSeedMedia(): Promise<void> {
-  const endpoint = process.env.MINIO_ENDPOINT ?? 'localhost';
-  const port = Number(process.env.MINIO_PORT ?? process.env.MINIO_API_PORT ?? 9000);
-  const client = new MinioClient({
-    endPoint: endpoint,
-    port,
-    useSSL: process.env.MINIO_USE_SSL === 'true',
-    accessKey: process.env.MINIO_ACCESS_KEY ?? process.env.MINIO_ROOT_USER ?? 'minioadmin',
-    secretKey: process.env.MINIO_SECRET_KEY ?? process.env.MINIO_ROOT_PASSWORD ?? 'minioadmin_dev'
-  });
-  const mediaBucket = process.env.MINIO_MEDIA_BUCKET ?? 'media';
-  const avatarBucket = process.env.MINIO_AVATAR_BUCKET ?? 'avatars';
-
-  for (const bucket of [mediaBucket, avatarBucket]) {
-    if (!(await client.bucketExists(bucket))) await client.makeBucket(bucket, 'us-east-1');
-  }
-  for (const category of categories) {
-    for (let variant = 0; variant < 3; variant += 1) {
-      const body = coverSvg(category, variant);
-      await client.putObject(
-        mediaBucket,
-        `seed/v1/covers/${category.toLowerCase()}-${variant}.svg`,
-        body,
-        body.length,
-        {
-          'Content-Type': 'image/svg+xml',
-          'Cache-Control': 'public, max-age=31536000, immutable'
-        }
-      );
-    }
-  }
-  for (let index = 0; index < 32; index += 1) {
-    const body = avatarSvg(index);
-    await client.putObject(avatarBucket, `seed/v1/avatars/avatar-${index}.svg`, body, body.length, {
-      'Content-Type': 'image/svg+xml',
-      'Cache-Control': 'public, max-age=31536000, immutable'
-    });
-  }
-}
-
 async function seedProfiles(client: Client, config: ScaleDefinition, options: SeedOptions): Promise<void> {
   const random = createRandom(`${options.randomSeed}:profiles`);
-  const publicUrl = mediaPublicUrl();
   const rows: SqlValue[][] = [];
   for (let index = 0; index < config.profiles; index += 1) {
     const creator = index < config.creators;
@@ -463,9 +449,7 @@ async function seedProfiles(client: Client, config: ScaleDefinition, options: Se
       creator
         ? `Organizuję ciekawe wydarzenia w okolicy. ${pick(random, eventCopy[pick(random, categories)].details)}.`
         : 'Lubię odkrywać lokalne miejsca i poznawać ludzi.',
-      options.withMedia
-        ? `${publicUrl}/${process.env.MINIO_AVATAR_BUCKET ?? 'avatars'}/seed/v1/avatars/avatar-${index % 32}.svg`
-        : null,
+      options.withMedia ? avatarPhotoUrl(index) : null,
       selectedInterests,
       creator || random() < 0.65,
       creator ? Math.floor(20 + Math.exp(Math.min(7, 2 + normal(random)))) : Math.floor(random() * 25),
@@ -542,7 +526,7 @@ async function seedEvents(client: Client, config: ScaleDefinition, options: Seed
       state.status === 'PUBLISHED' && state.mediaStatus === 'READY' && state.verification === 'VERIFIED' && !archivedAt;
     const popularity = Math.max(0.05, Math.exp(normal(random) * 1.15) * (dayOffset >= 0 && dayOffset <= 30 ? 1.4 : 1));
     const title = `${pick(random, copy.nouns)} — ${district}`;
-    const mediaKey = `seed/v1/covers/${category.toLowerCase()}-${index % 3}.svg`;
+    const photoUrl = eventPhotoUrl(category, index);
 
     eventRows.push([
       id,
@@ -552,7 +536,7 @@ async function seedEvents(client: Client, config: ScaleDefinition, options: Seed
       startDate,
       endDate,
       organizerSub,
-      options.withMedia ? `${mediaPublicUrl()}/${process.env.MINIO_MEDIA_BUCKET ?? 'media'}/${mediaKey}` : null,
+      options.withMedia ? photoUrl : null,
       pricing.type,
       pricing.min,
       pricing.max,
@@ -591,12 +575,12 @@ async function seedEvents(client: Client, config: ScaleDefinition, options: Seed
         uuid(`photo:${index}`),
         id,
         organizerSub,
-        `seed/v1/raw/${id}.svg`,
-        mediaKey,
+        `seed/v1/external/${id}.jpg`,
+        photoUrl,
         'READY',
         0,
-        'image/svg+xml',
-        24_000,
+        'image/jpeg',
+        null,
         createdAt,
         createdAt
       ]);
@@ -1012,11 +996,6 @@ async function main(): Promise<void> {
   console.table(config);
   console.log(`Tryb: ${options.dryRun ? 'dry-run' : 'zapis'}, media: ${options.withMedia ? 'tak' : 'nie'}`);
   if (options.dryRun) return;
-
-  if (options.withMedia) {
-    console.log('Przygotowuję współdzielone grafiki eventów i avatarów w MinIO...');
-    await uploadSeedMedia();
-  }
 
   const client = new Client({ connectionString: databaseUrl() });
   await client.connect();

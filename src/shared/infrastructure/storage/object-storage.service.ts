@@ -104,6 +104,9 @@ export class ObjectStorageService {
 
   /** Public URL for an object in a public-serving bucket (e.g. the media bucket). */
   getPublicUrl(bucket: string, key: string): string {
+    // Seed data may point at a stable external stock-photo CDN instead of
+    // duplicating those assets in local object storage.
+    if (key.startsWith('https://')) return key;
     if (this.publicUrl) {
       return `${this.publicUrl.replace(/\/$/, '')}/${bucket}/${key}`;
     }

@@ -14,7 +14,8 @@ import {
   moderationReports,
   notifications,
   profiles,
-  userBlocks
+  userBlocks,
+  userSettings
 } from '@api/shared/infrastructure/database/schema';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
@@ -207,6 +208,7 @@ export class AccountDeletionWorker implements OnApplicationBootstrap, OnModuleDe
         );
       await tx.delete(notifications).where(eq(notifications.keycloakSub, deletion.keycloak_user_id));
       await tx.delete(businesses).where(eq(businesses.keycloakSub, deletion.keycloak_user_id));
+      await tx.delete(userSettings).where(eq(userSettings.profileId, deletion.profile_id));
 
       await tx
         .delete(eventPhotos)

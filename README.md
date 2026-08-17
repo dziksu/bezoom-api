@@ -58,7 +58,7 @@ pnpm db:seed -- --scale=demo
 pnpm db:seed -- --scale=performance
 ```
 
-Jeśli polecenie jest wykonywane wewnątrz kontenera API, równoważna forma to `docker compose exec api pnpm db:seed`. Seed domyślnie dodaje do MinIO lekkie, współdzielone grafiki SVG dla kategorii i avatarów. Gdy potrzebne są tylko rekordy PostgreSQL, można użyć `--skip-media`.
+Jeśli polecenie jest wykonywane wewnątrz kontenera API, równoważna forma to `docker compose exec api pnpm db:seed`. Seed domyślnie przypisuje tematyczne zdjęcia eventów z Unsplash oraz portrety z Pravatar, bez kopiowania plików do lokalnego MinIO. Gdy potrzebne są rekordy bez URL-i mediów, można użyć `--skip-media`.
 
 | Skala         | Profile | Twórcy | Eventy |   Lajki |  Zapisy |    RSVP | Komentarze | Znajomości | Notyfikacje |
 | ------------- | ------: | -----: | -----: | ------: | ------: | ------: | ---------: | ---------: | ----------: |
