@@ -166,19 +166,19 @@ export class MapEventClusterDto {
 }
 
 export class MapEventsResponseDto {
-  @ApiProperty({ type: [MapEventPinDto], description: 'Events whose reach makes them individually visible at this zoom.' })
+  @ApiProperty({ type: [MapEventPinDto], description: 'Events visible at this zoom, ordered by reach.' })
   events: MapEventPinDto[];
 
-  @ApiProperty({ type: [MapEventClusterDto], description: 'All remaining events grouped into deterministic map cells.' })
+  @ApiProperty({ type: [MapEventClusterDto], description: 'Deprecated; map events are no longer clustered.' })
   clusters: MapEventClusterDto[];
 
-  @ApiProperty({ description: 'Exact number of matching events in the viewport before visual aggregation.' })
+  @ApiProperty({ description: 'Exact number of events returned for the viewport and zoom.' })
   totalCount: number;
 
-  @ApiProperty({ description: 'Events represented by individual pins plus all cluster counts; equals totalCount.' })
+  @ApiProperty({ description: 'Deprecated compatibility field; equals totalCount.' })
   representedCount: number;
 
-  @ApiProperty({ description: 'Minimum reach in kilometres required for an individual pin at this zoom.' })
+  @ApiProperty({ description: 'Minimum reach in kilometres returned at this zoom.' })
   individualReachKm: number;
 
   @ApiProperty()

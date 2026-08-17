@@ -25,7 +25,7 @@ export class CancelEventHandler implements ICommandHandler<CancelEventCommand, E
       throw error;
     }
     await this.repository.update(event);
-    await this.cache.delete('event_detail', event.id);
+    await Promise.all([this.cache.delete('event_detail', event.id), this.cache.incrementVersion('event_map')]);
     return {
       id: event.id,
       status: event.status,

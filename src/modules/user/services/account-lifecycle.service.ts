@@ -224,6 +224,7 @@ export class AccountLifecycleService {
       .where(eq(events.organizerKeycloakSub, subject));
     await Promise.all(ownedEvents.map((event) => this.cache.delete('event_detail', event.id)));
     await this.cache.clearNamespace('event_search');
+    await this.cache.incrementVersion('event_map');
   }
 
   private async revokeSessionsBestEffort(subject: string): Promise<void> {

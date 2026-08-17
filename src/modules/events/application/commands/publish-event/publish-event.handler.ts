@@ -34,7 +34,7 @@ export class PublishEventHandler implements ICommandHandler<PublishEventCommand,
     }
 
     await this.repository.updateLifecycle(event);
-    await this.cache.delete('event_detail', event.id);
+    await Promise.all([this.cache.delete('event_detail', event.id), this.cache.incrementVersion('event_map')]);
 
     return {
       id: event.id,

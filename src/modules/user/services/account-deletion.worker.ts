@@ -271,6 +271,7 @@ export class AccountDeletionWorker implements OnApplicationBootstrap, OnModuleDe
 
     await Promise.all([...new Set(affectedEventIds)].map((eventId) => this.cache.delete('event_detail', eventId)));
     await this.cache.clearNamespace('event_search');
+    await this.cache.incrementVersion('event_map');
     await this.invalidateAccountStatus(deletion.keycloak_user_id);
   }
 

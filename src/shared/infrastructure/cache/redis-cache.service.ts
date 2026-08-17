@@ -53,6 +53,56 @@ export class RedisCacheService implements OnModuleDestroy {
     }
   }
 
+  async getMany<T>(namespace: string, keys: string[]): Promise<Map<string, T>> {
+    if (keys.length === 0) return new Map();
+    try {
+      await this.ensureConnected();
+      const cacheKeys = keys.map((key) => `bezoom:${namespace}:${key}`);
+      const values = await this.redis.mget(...cacheKeys);
+      const result = new Map<string, T>();
+      values.forEach((value, index) => {
+        if (value === null) {
+          this.metrics.observeCacheOperation(namespace, 'miss');
+          return;
+        }
+        this.metrics.observeCacheOperation(namespace, 'hit');
+        result.set(keys[index], JSON.parse(value) as T);
+      });
+      return result;
+    } catch {
+      this.metrics.observeCacheOperation(namespace, 'error');
+      return new Map();
+    }
+  }
+
+  async setMany<T>(namespace: string, entries: Map<string, T>, ttlSeconds: number): Promise<void> {
+    await Promise.all(
+      [...entries].map(([key, value]) => this.write(namespace, `bezoom:${namespace}:${key}`, value, ttlSeconds))
+    );
+  }
+
+  async getVersion(namespace: string): Promise<number> {
+    try {
+      await this.ensureConnected();
+      const value = await this.redis.get(`bezoom:version:${namespace}`);
+      return value === null ? 0 : Math.max(0, Number(value) || 0);
+    } catch {
+      this.metrics.observeCacheOperation(namespace, 'error');
+      return 0;
+    }
+  }
+
+  async incrementVersion(namespace: string): Promise<void> {
+    try {
+      await this.ensureConnected();
+      await this.redis.incr(`bezoom:version:${namespace}`);
+      this.metrics.observeCacheOperation(namespace, 'delete');
+    } catch {
+      this.metrics.observeCacheOperation(namespace, 'error');
+      this.logger.warn('CACHE_VERSION_INCREMENT_FAILED');
+    }
+  }
+
   async clearNamespace(namespace: string): Promise<void> {
     try {
       await this.ensureConnected();

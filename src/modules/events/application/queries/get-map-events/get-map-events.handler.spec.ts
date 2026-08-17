@@ -15,21 +15,7 @@ describe('GetMapEventsHandler', () => {
     return Promise.resolve({
       rows: [
         {
-          total_count: '503',
-          represented_count: '503',
-          events: [],
-          clusters: [
-            {
-              id: 'cluster-a',
-              latitude: 52.2,
-              longitude: 21.1,
-              count: '503',
-              west: 20.9,
-              south: 52.1,
-              east: 21.2,
-              north: 52.4
-            }
-          ]
+          events: []
         }
       ]
     });
@@ -38,7 +24,9 @@ describe('GetMapEventsHandler', () => {
   const writeService = { db: { execute } } as unknown as DrizzleWriteService;
   const objectStorage = {} as ObjectStorageService;
   const cache = {
-    getOrSet: jest.fn((_namespace: string, _key: string, _ttl: number, loader: () => Promise<unknown>) => loader())
+    getVersion: jest.fn().mockResolvedValue(1),
+    getMany: jest.fn().mockResolvedValue(new Map()),
+    setMany: jest.fn().mockResolvedValue(undefined)
   } as unknown as RedisCacheService;
   const handler = new GetMapEventsHandler(readService, writeService, objectStorage, cache);
 
@@ -47,7 +35,7 @@ describe('GetMapEventsHandler', () => {
     capturedStatement = undefined;
   });
 
-  it('represents every viewport event as a reach-qualified pin or a cluster member without a hard pin limit', async () => {
+  it('loads missing sectors in one spatial query without clustering or a hard limit', async () => {
     const result = await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10, 0));
 
     if (!capturedStatement) throw new Error('MAP_SQL_NOT_CAPTURED');
@@ -56,22 +44,82 @@ describe('GetMapEventsHandler', () => {
 
     expect(normalizedSql).toContain('join locations l on l.geog &&');
     expect(normalizedSql).toContain('st_intersects(l.geog');
-    expect(normalizedSql).toContain('where radius_km >=');
-    expect(normalizedSql).toContain('where c.radius_km <');
+    expect(normalizedSql).toContain('and e.radius_km >=');
+    expect(normalizedSql).not.toContain('cluster_members');
+    expect(normalizedSql).not.toContain('st_snaptogrid');
     expect(normalizedSql).not.toContain(' limit ');
     expect(normalizedSql).not.toContain('row_number()');
     expect(result).toMatchObject({
-      totalCount: 503,
-      representedCount: 503,
-      individualReachKm: 25,
+      totalCount: 0,
+      representedCount: 0,
+      individualReachKm: 0,
       events: [],
-      clusters: [{ count: 503 }]
+      clusters: []
     });
+    expect(cache.getMany).toHaveBeenCalledWith(
+      'event_map_sector',
+      expect.arrayContaining([expect.stringMatching(/^v1:\d{4}-\d{2}-\d{2}:ALL:9:/)])
+    );
+    expect(cache.setMany).toHaveBeenCalledTimes(1);
   });
 
-  it('uses national reach for a country-level zoom', async () => {
+  it('includes city, regional and national reach at a country-level zoom', async () => {
     const result = await handler.execute(new GetMapEventsQuery(14.1, 49, 24.2, 54.9, 5, undefined));
-    expect(result.individualReachKm).toBe(1_000);
+    expect(result.individualReachKm).toBe(25);
+  });
+
+  it('includes local reach from a regional-level zoom', async () => {
+    const result = await handler.execute(new GetMapEventsQuery(14.1, 49, 24.2, 54.9, 6, undefined));
+    expect(result.individualReachKm).toBe(0);
+  });
+
+  it('uses the same sector keys for fractional movement within a zoom level', async () => {
+    await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10.1, 0));
+    const firstKeys = (cache.getMany as jest.Mock).mock.calls.at(-1)?.[1];
+    await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10.9, 0));
+    const secondKeys = (cache.getMany as jest.Mock).mock.calls.at(-1)?.[1];
+    expect(secondKeys).toEqual(firstKeys);
+  });
+
+  it('serves a fully cached sector coverage without querying PostGIS', async () => {
+    (cache.getMany as jest.Mock).mockImplementationOnce((_namespace: string, keys: string[]) =>
+      Promise.resolve(
+        new Map(
+          keys.map((key, index) => [
+            key,
+            index === 0
+              ? [
+                  {
+                    id: 'cached-event',
+                    title: 'Cached event',
+                    description: 'Cached event description',
+                    category: 'ENTERTAINMENT',
+                    startDate: new Date(Date.now() + 86_400_000).toISOString(),
+                    latitude: 52.2,
+                    longitude: 21.05,
+                    country: 'PL',
+                    priceType: 'FREE',
+                    currency: 'PLN',
+                    amenities: [],
+                    photos: [],
+                    status: 'PUBLISHED',
+                    verificationStatus: 'VERIFIED',
+                    createdAt: new Date().toISOString(),
+                    distanceKm: 0,
+                    reachKm: 150,
+                    visibilityLevel: 'REGIONAL'
+                  }
+                ]
+              : []
+          ])
+        )
+      )
+    );
+
+    const result = await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10, 0));
+    expect(execute).not.toHaveBeenCalled();
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({ id: 'cached-event', distanceKm: expect.any(Number) });
   });
 
   it('rejects inverted viewport bounds', async () => {

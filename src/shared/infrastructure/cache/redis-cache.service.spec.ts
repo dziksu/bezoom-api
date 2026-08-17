@@ -4,6 +4,8 @@ import type { MetricsService } from '../observability/metrics.service';
 const get = jest.fn<Promise<string | null>, [string]>();
 const set = jest.fn<Promise<'OK'>, [string, string, string, number]>().mockResolvedValue('OK');
 const del = jest.fn<Promise<number>, [string]>().mockResolvedValue(1);
+const mget = jest.fn<Promise<(string | null)[]>, [string[]]>();
+const incr = jest.fn<Promise<number>, [string]>().mockResolvedValue(2);
 const connect = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
 const disconnect = jest.fn<void, []>();
 const on = jest.fn();
@@ -14,6 +16,8 @@ jest.mock('ioredis', () => ({
     get,
     set,
     del,
+    mget: (...keys: string[]) => mget(keys),
+    incr,
     connect,
     disconnect,
     on
@@ -59,5 +63,23 @@ describe('RedisCacheService', () => {
     await expect(cache.getOrSet('event_detail', 'event-id', 30, () => Promise.resolve('database'))).resolves.toBe(
       'database'
     );
+  });
+
+  it('reads sector batches and preserves their logical keys', async () => {
+    mget.mockResolvedValueOnce([JSON.stringify({ id: 'first' }), null, JSON.stringify({ id: 'third' })]);
+    const cache = new RedisCacheService(config, metrics);
+
+    await expect(cache.getMany<{ id: string }>('event_map_sector', ['a', 'b', 'c'])).resolves.toEqual(
+      new Map([
+        ['a', { id: 'first' }],
+        ['c', { id: 'third' }]
+      ])
+    );
+  });
+
+  it('increments a namespace version for constant-time invalidation', async () => {
+    const cache = new RedisCacheService(config, metrics);
+    await cache.incrementVersion('event_map');
+    expect(incr).toHaveBeenCalledWith('bezoom:version:event_map');
   });
 });

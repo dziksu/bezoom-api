@@ -194,11 +194,11 @@ export class EventsController {
   // ── Discovery / read (declared before /:id so static paths win) ──────────
 
   @ApiOperation({
-    summary: 'Get the complete visual representation of events in a map viewport',
+    summary: 'Get event pins for a map viewport',
     description:
-      'Returns individually visible promoted/reach-qualified events, clusters for every remaining event, and an exact total. This endpoint is viewport-based and intentionally has no text-search parameter.'
+      'Returns city, regional and national pins at country zoom. Local pins join from regional zoom onward. Pins are never clustered. This endpoint is viewport-based and intentionally has no text-search parameter.'
   })
-  @ApiResponse({ status: 200, description: 'Map pins, clusters and exact viewport total', type: MapEventsResponseDto })
+  @ApiResponse({ status: 200, description: 'Map pins and exact visible total', type: MapEventsResponseDto })
   @OptionalAuth()
   @Get('map')
   async getMapEvents(

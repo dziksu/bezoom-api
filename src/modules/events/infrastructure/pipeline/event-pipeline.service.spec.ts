@@ -45,7 +45,10 @@ describe('EventPipelineService', () => {
         ),
       copyObject: jest.fn().mockResolvedValue(undefined)
     };
-    const cache = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cache = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incrementVersion: jest.fn().mockResolvedValue(undefined)
+    };
 
     const service = new EventPipelineService(
       config as unknown as ConfigService,

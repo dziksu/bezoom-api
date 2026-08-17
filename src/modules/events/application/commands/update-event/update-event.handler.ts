@@ -86,7 +86,7 @@ export class UpdateEventHandler implements ICommandHandler<UpdateEventCommand, E
     }
 
     await this.repository.update(event, { removedPhotoIds });
-    await this.cache.delete('event_detail', event.id);
+    await Promise.all([this.cache.delete('event_detail', event.id), this.cache.incrementVersion('event_map')]);
     return this.lifecycle(event);
   }
 

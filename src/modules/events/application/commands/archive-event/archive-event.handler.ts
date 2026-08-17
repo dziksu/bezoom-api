@@ -18,6 +18,6 @@ export class ArchiveEventHandler implements ICommandHandler<ArchiveEventCommand,
     }
     event.archive();
     await this.repository.update(event);
-    await this.cache.delete('event_detail', event.id);
+    await Promise.all([this.cache.delete('event_detail', event.id), this.cache.incrementVersion('event_map')]);
   }
 }

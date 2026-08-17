@@ -32,7 +32,10 @@ describe('owner event lifecycle handlers', () => {
       update: jest.fn().mockResolvedValue(undefined),
       findPhotosForRevision: jest.fn()
     };
-    const cache = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cache = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incrementVersion: jest.fn().mockResolvedValue(undefined)
+    };
     const storage = { rawBucket: 'raw-uploads', statObject: jest.fn() };
     return {
       repository,
@@ -65,6 +68,7 @@ describe('owner event lifecycle handlers', () => {
     expect(result.verificationStatus).toBe('UNVERIFIED');
     expect(repository.update).toHaveBeenCalledWith(event, { removedPhotoIds: [] });
     expect(cache.delete).toHaveBeenCalledWith('event_detail', event.id);
+    expect(cache.incrementVersion).toHaveBeenCalledWith('event_map');
   });
 
   it('queues a revised rejected event for a fresh review', async () => {

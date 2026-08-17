@@ -32,7 +32,10 @@ describe('PublishEventHandler', () => {
       updateLifecycle: jest.fn().mockResolvedValue(undefined)
     };
     const policy = { getEligibilityError: jest.fn().mockResolvedValue(eligibilityError) };
-    const cache = { delete: jest.fn().mockResolvedValue(undefined) };
+    const cache = {
+      delete: jest.fn().mockResolvedValue(undefined),
+      incrementVersion: jest.fn().mockResolvedValue(undefined)
+    };
     const handler = new PublishEventHandler(
       repository as unknown as EventRepository,
       policy,
@@ -50,6 +53,7 @@ describe('PublishEventHandler', () => {
     expect(result.status).toBe('PUBLISHED');
     expect(repository.updateLifecycle).toHaveBeenCalledWith(event);
     expect(cache.delete).toHaveBeenCalledWith('event_detail', event.id);
+    expect(cache.incrementVersion).toHaveBeenCalledWith('event_map');
   });
 
   it('masks a foreign event as not found', async () => {
