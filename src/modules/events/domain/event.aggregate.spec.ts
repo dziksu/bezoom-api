@@ -35,14 +35,14 @@ describe('Event aggregate', () => {
     photos: event.photos
   });
 
-  it('creates an uploaded event awaiting moderation with system reach', () => {
+  it('creates an uploaded event awaiting moderation in the Nearby reach tier', () => {
     const event = Event.create(baseInput(), randomUUID());
 
     expect(event.status).toBe('UPLOADED');
     expect(event.mediaPipelineStatus).toBe('UPLOADED');
     expect(event.verificationStatus).toBe('UNVERIFIED');
     expect(event.verifiedAt).toBeUndefined();
-    expect(event.radiusKm).toBe(5);
+    expect(event.radiusKm).toBe(1);
     expect(event.visibility).toBe('PUBLIC');
     expect(event.submittedByIsOrganizer).toBe(false);
   });

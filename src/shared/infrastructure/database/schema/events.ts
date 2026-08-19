@@ -77,7 +77,7 @@ export const events = pgTable(
     moderatedAt: timestamp('moderated_at', { withTimezone: true }),
     // Visibility
     visibility: visibilityEnum('visibility').default('PUBLIC').notNull(),
-    radiusKm: integer('radius_km').default(5).notNull(),
+    radiusKm: integer('radius_km').default(1).notNull(),
     // Verification (separate axis from publication `status` and `mediaPipelineStatus`)
     verificationStatus: verificationStatusEnum('verification_status').default('UNVERIFIED').notNull(),
     verificationRejectionReason: text('verification_rejection_reason'),

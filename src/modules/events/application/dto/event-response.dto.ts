@@ -161,8 +161,8 @@ export class MapEventPinDto extends EventSearchResultDto {
   @ApiProperty({ description: 'Configured event reach in kilometres.' })
   reachKm: number;
 
-  @ApiProperty({ enum: ['LOCAL', 'CITY', 'REGIONAL', 'NATIONAL'] })
-  visibilityLevel: 'LOCAL' | 'CITY' | 'REGIONAL' | 'NATIONAL';
+  @ApiProperty({ enum: ['NEARBY', 'LOCAL', 'CITY', 'REGIONAL', 'NATIONAL'] })
+  visibilityLevel: 'NEARBY' | 'LOCAL' | 'CITY' | 'REGIONAL' | 'NATIONAL';
 }
 
 export class MapClusterBoundsDto {

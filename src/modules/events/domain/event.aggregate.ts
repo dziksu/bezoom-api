@@ -28,8 +28,11 @@ export type EventVisibility = 'PUBLIC' | 'PRIVATE';
 export type VerificationStatus = 'UNVERIFIED' | 'VERIFIED' | 'REJECTED';
 export type MediaPipelineStatus = 'UPLOADED' | 'REJECTED' | 'NEEDS_REVIEW' | 'APPROVED' | 'READY';
 
-// MVP policy. The value belongs to the backend and is never accepted from a client.
-export const MVP_EVENT_REACH_RADIUS_KM = 5;
+// Reach is controlled by the backend and is never accepted from a client.
+// New events begin in the nearest discovery ring; later engagement policies may
+// promote them through LOCAL, CITY, REGIONAL and NATIONAL reach.
+export const NEARBY_EVENT_REACH_RADIUS_KM = 1;
+export const NATIONAL_EVENT_REACH_RADIUS_KM = 1_000;
 
 // PRD requires 1-5 photos per event. MIN_PHOTOS is the single toggle to flip later
 // if the product ever allows creating an event with zero photos.
@@ -141,7 +144,7 @@ export class Event extends AggregateRoot<EventProps> {
         // MVP exposes public events only. The enum remains future-ready for a
         // post-MVP access model, but no creation input can select PRIVATE.
         visibility: 'PUBLIC',
-        radiusKm: MVP_EVENT_REACH_RADIUS_KM,
+        radiusKm: NEARBY_EVENT_REACH_RADIUS_KM,
         verificationStatus: 'UNVERIFIED',
         version: 0,
         createdAt: now,

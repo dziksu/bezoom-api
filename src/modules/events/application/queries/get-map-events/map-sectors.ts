@@ -40,7 +40,9 @@ export function sectorCacheKey(
   scope: 'CITY_PLUS' | 'ALL',
   sector: Pick<MapSector, 'zoom' | 'x' | 'y'>
 ): string {
-  return `v${version}:${week ?? 'all'}:${scope}:${sector.zoom}:${sector.x}:${sector.y}`;
+  // Reach model v2 adds the NEARBY level. Keep the Redis namespace separate
+  // from v1 so cached pins never carry an obsolete visibility level.
+  return `reach-v2:v${version}:${week ?? 'all'}:${scope}:${sector.zoom}:${sector.x}:${sector.y}`;
 }
 
 export function boundsCoveringSectors(sectors: MapSector[]): MapSectorBounds {

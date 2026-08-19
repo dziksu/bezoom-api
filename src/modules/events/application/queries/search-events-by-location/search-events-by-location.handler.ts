@@ -9,9 +9,11 @@ import { SearchEventsByLocationQuery } from './search-events-by-location.query';
 import type { EventSearchResponseDto } from '../../dto/event-response.dto';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
 import { decodeGeoCursor, encodeGeoCursor } from '@api/shared/domain/cursor-pagination';
-import { MVP_EVENT_REACH_RADIUS_KM } from '../../../domain/event.aggregate';
+import { NATIONAL_EVENT_REACH_RADIUS_KM } from '../../../domain/event.aggregate';
 
-export const MVP_DISCOVERY_RADIUS_METERS = MVP_EVENT_REACH_RADIUS_KM * 1000;
+// The maximum national reach bounds the indexed candidate scan. Each event is
+// then filtered against its own reach, so Nearby events stay truly nearby.
+export const MAX_DISCOVERY_RADIUS_METERS = NATIONAL_EVENT_REACH_RADIUS_KM * 1000;
 
 interface SearchRow {
   [key: string]: unknown;
@@ -86,7 +88,7 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           p.week_start,
           ST_Distance(l.geog, p.origin, false) AS distance_m
         FROM params p
-        JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MVP_DISCOVERY_RADIUS_METERS}, false)
+        JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MAX_DISCOVERY_RADIUS_METERS}, false)
       )
       , candidates AS (
         SELECT
@@ -103,7 +105,7 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           AND e.verification_status = 'VERIFIED'
           AND e.visibility = 'PUBLIC'
           AND e.media_pipeline_status = 'READY'
-          AND e.radius_km = ${MVP_EVENT_REACH_RADIUS_KM}
+          AND l.distance_m <= e.radius_km * 1000
           AND e.archived_at IS NULL
           AND e.start_date > now()
           AND organizer.account_status = 'ACTIVE'

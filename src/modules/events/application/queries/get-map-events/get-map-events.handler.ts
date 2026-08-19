@@ -251,7 +251,8 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
     if (radiusKm >= 1_000) return 'NATIONAL';
     if (radiusKm >= 150) return 'REGIONAL';
     if (radiusKm >= 25) return 'CITY';
-    return 'LOCAL';
+    if (radiusKm >= 5) return 'LOCAL';
+    return 'NEARBY';
   }
 
   private async fetchCoverPhotos(eventIds: string[]): Promise<Map<string, string>> {

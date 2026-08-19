@@ -99,6 +99,13 @@
       "when": 1787061600000,
       "tag": "0013_creator_follows_and_event_submitter",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787148000000,
+      "tag": "0014_nearby_event_reach",
+      "breakpoints": true
     }
   ]
 }

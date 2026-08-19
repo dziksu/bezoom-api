@@ -4,7 +4,7 @@ import type { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read
 import type { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import type { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import type { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
-import { MVP_DISCOVERY_RADIUS_METERS, SearchEventsByLocationHandler } from './search-events-by-location.handler';
+import { MAX_DISCOVERY_RADIUS_METERS, SearchEventsByLocationHandler } from './search-events-by-location.handler';
 import { SearchEventsByLocationQuery } from './search-events-by-location.query';
 
 const searchRow = (id: string, timestampsAsText = false) => ({
@@ -64,7 +64,7 @@ describe('SearchEventsByLocationHandler', () => {
     photoOrderBy.mockResolvedValue([]);
   });
 
-  it('uses an indexable constant-radius ST_DWithin and avoids an exact count', async () => {
+  it('uses an indexable national candidate radius and each event reach without an exact count', async () => {
     await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, undefined, undefined, 20));
 
     if (!capturedStatement) throw new Error('SEARCH_SQL_NOT_CAPTURED');
@@ -77,10 +77,10 @@ describe('SearchEventsByLocationHandler', () => {
     expect(normalizedSql).toContain('st_dwithin(l.geog, p.origin, $');
     expect(normalizedSql).toContain(', false)');
     expect(normalizedSql).toContain('and e.start_date > now()');
-    expect(normalizedSql).toContain('and e.radius_km =');
+    expect(normalizedSql).toContain('and l.distance_m <= e.radius_km * 1000');
     expect(normalizedSql).toContain('and e.archived_at is null');
     expect(normalizedSql).not.toContain('count(*) over');
-    expect(compiled.params).toContain(MVP_DISCOVERY_RADIUS_METERS);
+    expect(compiled.params).toContain(MAX_DISCOVERY_RADIUS_METERS);
     expect(compiled.params).toContain(21);
   });
 

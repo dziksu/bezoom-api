@@ -60,7 +60,7 @@ describe('GetMapEventsHandler', () => {
     });
     expect(cacheGetMany).toHaveBeenCalledWith(
       'event_map_sector',
-      expect.arrayContaining([expect.stringMatching(/^v1:\d{4}-\d{2}-\d{2}:ALL:9:/)])
+      expect.arrayContaining([expect.stringMatching(/^reach-v2:v1:\d{4}-\d{2}-\d{2}:ALL:9:/)])
     );
     expect(cacheSetMany).toHaveBeenCalledTimes(1);
   });
@@ -73,6 +73,18 @@ describe('GetMapEventsHandler', () => {
   it('includes local reach from a regional-level zoom', async () => {
     const result = await handler.execute(new GetMapEventsQuery(14.1, 49, 24.2, 54.9, 6, undefined));
     expect(result.individualReachKm).toBe(0);
+  });
+
+  it('maps every configured reach boundary to its visibility level', () => {
+    const visibilityLevel = (radiusKm: number) =>
+      (handler as unknown as { visibilityLevel: (value: number) => string }).visibilityLevel(radiusKm);
+
+    expect(visibilityLevel(1)).toBe('NEARBY');
+    expect(visibilityLevel(4)).toBe('NEARBY');
+    expect(visibilityLevel(5)).toBe('LOCAL');
+    expect(visibilityLevel(25)).toBe('CITY');
+    expect(visibilityLevel(150)).toBe('REGIONAL');
+    expect(visibilityLevel(1_000)).toBe('NATIONAL');
   });
 
   it('uses the same sector keys for fractional movement within a zoom level', async () => {
