@@ -22,6 +22,7 @@ interface SearchRow {
   start_date: Date | string;
   end_date: Date | string | null;
   organizer_id: string | null;
+  submitted_by_is_organizer: boolean;
   price_type: string | null;
   price_min: string | null;
   price_max: string | null;
@@ -90,7 +91,7 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
       , candidates AS (
         SELECT
           e.id, e.title, e.description, e.category, e.start_date, e.end_date,
-          organizer.id AS organizer_id, e.price_type, e.price_min, e.price_max, e.currency,
+          organizer.id AS organizer_id, e.submitted_by_is_organizer, e.price_type, e.price_min, e.price_max, e.currency,
           e.ticket_url, e.price_notes, e.amenities, e.status,
           e.verification_status, e.created_at,
           l.latitude, l.longitude, l.address, l.city, l.country,
@@ -146,6 +147,8 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
         startDate: this.databaseDate(row.start_date),
         endDate: row.end_date ? this.databaseDate(row.end_date) : undefined,
         organizerId: row.organizer_id ?? undefined,
+        creatorId: row.organizer_id ?? undefined,
+        submittedByIsOrganizer: row.submitted_by_is_organizer,
         latitude: Number(row.latitude),
         longitude: Number(row.longitude),
         address: row.address ?? undefined,

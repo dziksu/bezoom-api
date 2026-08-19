@@ -92,6 +92,13 @@
       "when": 1786971600000,
       "tag": "0012_user_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787061600000,
+      "tag": "0013_creator_follows_and_event_submitter",
+      "breakpoints": true
     }
   ]
 }

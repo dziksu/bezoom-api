@@ -9,11 +9,12 @@ import {
   HttpStatus
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { eq, and, lt, sql } from 'drizzle-orm';
+import { eq, and, lt, sql, isNull } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
 import { profiles } from '@api/shared/infrastructure/database/schema/profiles';
+import { events, creatorFollows } from '@api/shared/infrastructure/database/schema';
 import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import {
   UpdateProfileDto,
@@ -156,7 +157,33 @@ export class ProfileService {
       throw new NotFoundException('PROFILE_NOT_FOUND');
     }
 
-    return this.toPublicResponseDto(profile);
+    const [creatorEvent, following] = await Promise.all([
+      this.drizzleRead.db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.organizerKeycloakSub, profile.keycloakSub), isNull(events.archivedAt)))
+        .limit(1),
+      viewerKeycloakSub && viewerKeycloakSub !== profile.keycloakSub
+        ? this.drizzleWrite.db
+            .select({ id: creatorFollows.id })
+            .from(creatorFollows)
+            .where(
+              and(
+                eq(creatorFollows.followerKeycloakSub, viewerKeycloakSub),
+                eq(creatorFollows.followeeKeycloakSub, profile.keycloakSub)
+              )
+            )
+            .limit(1)
+        : Promise.resolve([])
+    ]);
+    const isMe = viewerKeycloakSub === profile.keycloakSub;
+
+    return this.toPublicResponseDto(profile, {
+      isCreator: profile.isPhoneVerified && creatorEvent.length > 0,
+      isFollowedByMe: following.length > 0,
+      isMe,
+      canViewAttendance: !profile.isPrivate || isMe
+    });
   }
 
   /**
@@ -624,7 +651,7 @@ export class ProfileService {
   private toResponseDto(profile: ProfileRecord): ProfileResponseDto {
     return {
       id: profile.id,
-      accountType: 'personal',
+      accountType: profile.accountType === 'business' ? 'business' : 'personal',
       firstName: profile.firstName ?? undefined,
       lastName: profile.lastName ?? undefined,
       username: profile.username ?? undefined,
@@ -643,9 +670,18 @@ export class ProfileService {
     };
   }
 
-  private toPublicResponseDto(profile: ProfileRecord): PublicProfileResponseDto {
+  private toPublicResponseDto(
+    profile: ProfileRecord,
+    social: Pick<PublicProfileResponseDto, 'isCreator' | 'isFollowedByMe' | 'isMe' | 'canViewAttendance'>
+  ): PublicProfileResponseDto {
+    const displayName =
+      profile.businessName ||
+      [profile.firstName, profile.lastName].filter(Boolean).join(' ') ||
+      (profile.username ? `@${profile.username}` : 'Użytkownik BeZoom');
     const common = {
       id: profile.id,
+      accountType: profile.accountType === 'business' ? ('business' as const) : ('personal' as const),
+      displayName,
       firstName: profile.firstName ?? undefined,
       lastName: profile.lastName ?? undefined,
       username: profile.username ?? undefined,
@@ -653,6 +689,7 @@ export class ProfileService {
       followersCount: profile.followersCount,
       followingCount: profile.followingCount,
       isPrivate: profile.isPrivate,
+      ...social,
       createdAt: profile.createdAt
     };
 

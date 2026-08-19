@@ -17,6 +17,7 @@ export class CreateEventCommand {
     },
     public readonly priceType: PriceType,
     public readonly photoIds: string[],
+    public readonly submittedByIsOrganizer = false,
     public readonly endDate?: string,
     public readonly priceMin?: number,
     public readonly priceMax?: number,

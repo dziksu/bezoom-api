@@ -52,7 +52,8 @@ describe('CreateEventHandler', () => {
       future(1),
       { latitude: 50.0647, longitude: 19.945 },
       'FREE',
-      photoIds
+      photoIds,
+      true
     );
 
   it('creates an uploaded event without exposing raw media', async () => {
@@ -64,6 +65,7 @@ describe('CreateEventHandler', () => {
     expect(result.status).toBe('UPLOADED');
     expect(result.verificationStatus).toBe('UNVERIFIED');
     expect(result.photos).toEqual([]);
+    expect(result.submittedByIsOrganizer).toBe(true);
     expect(result).not.toHaveProperty('visibility');
     expect(eventRepository.save).toHaveBeenCalledTimes(1);
     expect(objectStorage.copyObject).not.toHaveBeenCalled();

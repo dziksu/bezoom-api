@@ -86,6 +86,7 @@ export class EventsController {
         dto.location,
         dto.priceType,
         dto.photoIds,
+        dto.submittedByIsOrganizer ?? false,
         dto.endDate,
         dto.priceMin,
         dto.priceMax,

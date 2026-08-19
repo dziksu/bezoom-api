@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, decimal, integer, pgEnum, index } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, timestamp, decimal, integer, pgEnum, index, boolean } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 import { locations } from './locations';
 
@@ -54,6 +54,9 @@ export const events = pgTable(
     startDate: timestamp('start_date', { withTimezone: true }).notNull(),
     endDate: timestamp('end_date', { withTimezone: true }),
     organizerKeycloakSub: text('organizer_keycloak_sub').notNull(),
+    // The owner above is always the person who submitted the event. This flag
+    // records whether that person also declares that they organize it.
+    submittedByIsOrganizer: boolean('submitted_by_is_organizer').notNull().default(false),
     imageUrl: text('image_url'),
     // Pricing
     priceType: priceTypeEnum('price_type'),

@@ -14,6 +14,7 @@ import {
   IsNumber,
   Min,
   IsUrl,
+  IsBoolean,
   ValidateNested,
   Validate,
   ValidatorConstraint,
@@ -148,4 +149,14 @@ export class CreateEventDto {
   @ArrayMaxSize(5)
   @IsUUID('4', { each: true })
   photoIds: string[];
+
+  @ApiProperty({
+    required: false,
+    default: false,
+    description:
+      'Whether the submitting user declares that they are also the event organizer. The submitter remains the event owner either way.'
+  })
+  @IsOptional()
+  @IsBoolean()
+  submittedByIsOrganizer?: boolean;
 }

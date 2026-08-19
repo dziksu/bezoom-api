@@ -11,6 +11,26 @@ export class EventPhotoResponseDto {
   position: number;
 }
 
+export class EventCreatorResponseDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty({ enum: ['personal', 'business'] })
+  accountType: 'personal' | 'business';
+
+  @ApiProperty({ required: false })
+  username?: string;
+
+  @ApiProperty()
+  displayName: string;
+
+  @ApiProperty({ required: false })
+  avatarUrl?: string;
+
+  @ApiProperty()
+  followersCount: number;
+}
+
 export class EventResponseDto {
   @ApiProperty()
   id: string;
@@ -30,8 +50,19 @@ export class EventResponseDto {
   @ApiProperty({ required: false })
   endDate?: Date;
 
-  @ApiPropertyOptional({ description: 'Public profile id of the organizer.' })
+  @ApiPropertyOptional({ deprecated: true, description: 'Deprecated alias of creatorId.' })
   organizerId?: string;
+
+  @ApiPropertyOptional({ description: 'Public profile id of the person who submitted the event.' })
+  creatorId?: string;
+
+  @ApiPropertyOptional({ type: EventCreatorResponseDto })
+  creator?: EventCreatorResponseDto;
+
+  @ApiProperty({
+    description: 'Whether the submitter declared that they are also the organizer. Ownership is independent.'
+  })
+  submittedByIsOrganizer: boolean;
 
   @ApiProperty()
   latitude: number;

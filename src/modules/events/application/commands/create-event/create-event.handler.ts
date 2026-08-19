@@ -62,6 +62,7 @@ export class CreateEventHandler implements ICommandHandler<CreateEventCommand, E
           startDate: new Date(command.startDate),
           endDate: command.endDate ? new Date(command.endDate) : undefined,
           organizerKeycloakSub: command.organizerKeycloakSub,
+          submittedByIsOrganizer: command.submittedByIsOrganizer,
           location: command.location,
           price: {
             priceType: command.priceType,
@@ -95,6 +96,7 @@ export class CreateEventHandler implements ICommandHandler<CreateEventCommand, E
       category: event.category,
       startDate: event.period.startDate,
       endDate: event.period.endDate,
+      submittedByIsOrganizer: event.submittedByIsOrganizer,
       latitude: event.location.coordinates.latitude,
       longitude: event.location.coordinates.longitude,
       address: event.location.address,

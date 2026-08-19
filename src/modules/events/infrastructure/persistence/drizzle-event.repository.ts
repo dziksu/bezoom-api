@@ -93,6 +93,7 @@ export class DrizzleEventRepository extends EventRepository {
         .update(events)
         .set({
           title: event.title,
+          submittedByIsOrganizer: event.submittedByIsOrganizer,
           description: event.description,
           category: event.category,
           startDate: event.period.startDate,

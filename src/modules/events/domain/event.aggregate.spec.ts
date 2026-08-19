@@ -17,12 +17,14 @@ describe('Event aggregate', () => {
     category: 'MUSIC_AND_NIGHTLIFE',
     startDate: future(1),
     organizerKeycloakSub: 'organizer-sub',
+    submittedByIsOrganizer: false,
     location: { latitude: 50.0647, longitude: 19.945 },
     price: { priceType: 'FREE' },
     photos: onePhoto()
   });
 
   const revision = (event: Event): ReviseEventInput => ({
+    submittedByIsOrganizer: event.submittedByIsOrganizer,
     title: 'Revised Summer Jazz Night',
     description: `${longDescription} Revised.`,
     category: event.category,
@@ -42,6 +44,7 @@ describe('Event aggregate', () => {
     expect(event.verifiedAt).toBeUndefined();
     expect(event.radiusKm).toBe(5);
     expect(event.visibility).toBe('PUBLIC');
+    expect(event.submittedByIsOrganizer).toBe(false);
   });
 
   it('raises exactly one EventCreatedDomainEvent', () => {

@@ -10,6 +10,7 @@ import {
   IsString,
   IsUrl,
   IsUUID,
+  IsBoolean,
   MaxLength,
   Min,
   MinLength,
@@ -24,6 +25,13 @@ import { LocationDto } from './create-event.dto';
 const PRICE_TYPES: PriceType[] = ['FREE', 'FIXED', 'RANGE', 'DONATION'];
 
 export class UpdateEventDto {
+  @ApiPropertyOptional({
+    description: 'Whether the submitter declares that they are also the event organizer.'
+  })
+  @IsOptional()
+  @IsBoolean()
+  submittedByIsOrganizer?: boolean;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

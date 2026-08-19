@@ -19,6 +19,7 @@ export class EventMapper {
       category: event.category,
       period: EventPeriod.reconstitute(event.startDate, event.endDate ?? undefined),
       organizerKeycloakSub: event.organizerKeycloakSub,
+      submittedByIsOrganizer: event.submittedByIsOrganizer,
       location: EventLocation.create({
         latitude: Number(location.latitude),
         longitude: Number(location.longitude),
@@ -71,6 +72,7 @@ export class EventMapper {
       startDate: event.period.startDate,
       endDate: event.period.endDate,
       organizerKeycloakSub: event.organizerKeycloakSub,
+      submittedByIsOrganizer: event.submittedByIsOrganizer,
       priceType: event.price.priceType,
       priceMin: event.price.priceMin?.toString(),
       priceMax: event.price.priceMax?.toString(),

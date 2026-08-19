@@ -15,6 +15,7 @@ const searchRow = (id: string, timestampsAsText = false) => ({
   start_date: timestampsAsText ? '2026-09-01 18:00:00+00' : new Date('2026-09-01T18:00:00.000Z'),
   end_date: null,
   organizer_id: 'cd7ee731-259a-46d8-93ea-5580753b3637',
+  submitted_by_is_organizer: true,
   price_type: 'FREE',
   price_min: null,
   price_max: null,
@@ -89,7 +90,10 @@ describe('SearchEventsByLocationHandler', () => {
     const result = await handler.execute(new SearchEventsByLocationQuery(50.0647, 19.945, 0, undefined, 2));
 
     expect(result.items.map((event) => event.id)).toEqual(['one', 'two']);
-    expect(result.items[0]).toMatchObject({ organizerId: 'cd7ee731-259a-46d8-93ea-5580753b3637' });
+    expect(result.items[0]).toMatchObject({
+      creatorId: 'cd7ee731-259a-46d8-93ea-5580753b3637',
+      submittedByIsOrganizer: true
+    });
     expect(result.items[0]).not.toHaveProperty('organizerKeycloakSub');
     expect(result.items[0]).not.toHaveProperty('visibility');
     expect(result.hasMore).toBe(true);

@@ -16,3 +16,4 @@ export { businesses } from './businesses';
 export { notifications } from './notifications';
 export { moderationReports } from './moderation-reports';
 export { userBlocks } from './user-blocks';
+export { creatorFollows } from './creator-follows';

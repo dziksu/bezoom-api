@@ -8,12 +8,14 @@ import {
   Body,
   UseInterceptors,
   UploadedFile,
-  BadRequestException
+  BadRequestException,
+  ParseUUIDPipe,
+  Query
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiResponse, ApiTags, ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import type { Express } from 'express';
-import { CurrentUser } from '@api/shared/infrastructure/auth';
+import { CurrentUser, OptionalAuth } from '@api/shared/infrastructure/auth';
 import type { ICurrentUser } from '@api/shared/infrastructure/auth';
 import { RedisRateLimit } from '@api/shared/infrastructure/rate-limit';
 import { ProfileService } from './services/profile.service';
@@ -24,12 +26,18 @@ import {
   ProfileResponseDto,
   PublicProfileResponseDto
 } from './dto/profile.dto';
+import { CursorQueryDto } from '@api/modules/events/application/dto/cursor-query.dto';
+import { CursorAttendingEventsDto, CursorEventsDto } from '@api/modules/events/application/dto/event-response.dto';
+import { EventReadService } from '@api/modules/events/infrastructure/read/event-read.service';
 
 @ApiTags('User Profile')
 @ApiBearerAuth('JWT-auth')
 @Controller('user')
 export class UserController {
-  constructor(private readonly profileService: ProfileService) {}
+  constructor(
+    private readonly profileService: ProfileService,
+    private readonly eventReadService: EventReadService
+  ) {}
 
   /**
    * Get authenticated user's profile
@@ -68,9 +76,36 @@ export class UserController {
     type: PublicProfileResponseDto
   })
   @ApiResponse({ status: 404, description: 'Profile not found' })
+  @OptionalAuth()
   @Get('profile/:id')
-  async getProfileById(@CurrentUser() user: ICurrentUser, @Param('id') profileId: string) {
-    return this.profileService.getProfileById(profileId, user.id);
+  async getProfileById(@CurrentUser() user: ICurrentUser | undefined, @Param('id', ParseUUIDPipe) profileId: string) {
+    return this.profileService.getProfileById(profileId, user?.id);
+  }
+
+  @ApiOperation({ summary: 'List public events submitted by a profile' })
+  @ApiResponse({ status: 200, type: CursorEventsDto })
+  @OptionalAuth()
+  @Get('profile/:id/events/created')
+  async listProfileCreatedEvents(
+    @CurrentUser() user: ICurrentUser | undefined,
+    @Param('id', ParseUUIDPipe) profileId: string,
+    @Query() query: CursorQueryDto
+  ): Promise<CursorEventsDto> {
+    await this.profileService.getProfileById(profileId, user?.id);
+    return this.eventReadService.listPublicCreatedByProfile(profileId, user?.id, query.cursor, query.limit ?? 20);
+  }
+
+  @ApiOperation({ summary: 'List public attendance history for a profile' })
+  @ApiResponse({ status: 200, type: CursorAttendingEventsDto })
+  @OptionalAuth()
+  @Get('profile/:id/events/attending')
+  async listProfileAttendingEvents(
+    @CurrentUser() user: ICurrentUser | undefined,
+    @Param('id', ParseUUIDPipe) profileId: string,
+    @Query() query: CursorQueryDto
+  ): Promise<CursorAttendingEventsDto> {
+    await this.profileService.getProfileById(profileId, user?.id);
+    return this.eventReadService.listPublicAttendanceByProfile(profileId, user?.id, query.cursor, query.limit ?? 20);
   }
 
   /**

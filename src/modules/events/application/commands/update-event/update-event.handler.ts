@@ -39,6 +39,7 @@ export class UpdateEventHandler implements ICommandHandler<UpdateEventCommand, E
 
     try {
       event.revise({
+        submittedByIsOrganizer: command.changes.submittedByIsOrganizer ?? event.submittedByIsOrganizer,
         title: command.changes.title ?? event.title,
         description: command.changes.description ?? event.description,
         category: command.changes.category ?? event.category,

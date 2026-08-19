@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, lt, or } from 'drizzle-orm';
+import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
 import { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
-import { events, profiles, userBlocks } from '@api/shared/infrastructure/database/schema';
+import { creatorFollows, events, profiles, userBlocks } from '@api/shared/infrastructure/database/schema';
 import { decodeTimestampCursor, encodeTimestampCursor } from '@api/shared/domain/cursor-pagination';
 import {
   UserBlockRepository,
@@ -42,26 +42,61 @@ export class DrizzleUserBlockRepository extends UserBlockRepository {
       return { ...target, blockId: '', blockedAt: new Date() };
     }
 
-    const [created] = await this.write.db
-      .insert(userBlocks)
-      .values({ blockerKeycloakSub, blockedKeycloakSub: target.keycloakSub })
-      .onConflictDoNothing()
-      .returning({ id: userBlocks.id, createdAt: userBlocks.createdAt });
+    const stored = await this.write.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(userBlocks)
+        .values({ blockerKeycloakSub, blockedKeycloakSub: target.keycloakSub })
+        .onConflictDoNothing()
+        .returning({ id: userBlocks.id, createdAt: userBlocks.createdAt });
 
-    const stored =
-      created ??
-      (
-        await this.write.db
-          .select({ id: userBlocks.id, createdAt: userBlocks.createdAt })
-          .from(userBlocks)
+      if (created) {
+        const removedFollows = await tx
+          .delete(creatorFollows)
           .where(
-            and(
-              eq(userBlocks.blockerKeycloakSub, blockerKeycloakSub),
-              eq(userBlocks.blockedKeycloakSub, target.keycloakSub)
+            or(
+              and(
+                eq(creatorFollows.followerKeycloakSub, blockerKeycloakSub),
+                eq(creatorFollows.followeeKeycloakSub, target.keycloakSub)
+              ),
+              and(
+                eq(creatorFollows.followerKeycloakSub, target.keycloakSub),
+                eq(creatorFollows.followeeKeycloakSub, blockerKeycloakSub)
+              )
             )
           )
-          .limit(1)
-      )[0];
+          .returning({
+            followerKeycloakSub: creatorFollows.followerKeycloakSub,
+            followeeKeycloakSub: creatorFollows.followeeKeycloakSub
+          });
+
+        for (const follow of removedFollows) {
+          await tx
+            .update(profiles)
+            .set({ followingCount: sql`greatest(${profiles.followingCount} - 1, 0)`, updatedAt: new Date() })
+            .where(eq(profiles.keycloakSub, follow.followerKeycloakSub));
+          await tx
+            .update(profiles)
+            .set({ followersCount: sql`greatest(${profiles.followersCount} - 1, 0)`, updatedAt: new Date() })
+            .where(eq(profiles.keycloakSub, follow.followeeKeycloakSub));
+        }
+      }
+
+      return (
+        created ??
+        (
+          await tx
+            .select({ id: userBlocks.id, createdAt: userBlocks.createdAt })
+            .from(userBlocks)
+            .where(
+              and(
+                eq(userBlocks.blockerKeycloakSub, blockerKeycloakSub),
+                eq(userBlocks.blockedKeycloakSub, target.keycloakSub)
+              )
+            )
+            .limit(1)
+        )[0]
+      );
+    });
 
     return { ...target, blockId: stored.id, blockedAt: stored.createdAt };
   }

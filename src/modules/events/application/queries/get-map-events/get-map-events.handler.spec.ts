@@ -23,10 +23,12 @@ describe('GetMapEventsHandler', () => {
   const readService = { db: { execute } } as unknown as DrizzleReadService;
   const writeService = { db: { execute } } as unknown as DrizzleWriteService;
   const objectStorage = {} as ObjectStorageService;
+  const cacheGetMany = jest.fn().mockResolvedValue(new Map());
+  const cacheSetMany = jest.fn().mockResolvedValue(undefined);
   const cache = {
     getVersion: jest.fn().mockResolvedValue(1),
-    getMany: jest.fn().mockResolvedValue(new Map()),
-    setMany: jest.fn().mockResolvedValue(undefined)
+    getMany: cacheGetMany,
+    setMany: cacheSetMany
   } as unknown as RedisCacheService;
   const handler = new GetMapEventsHandler(readService, writeService, objectStorage, cache);
 
@@ -56,11 +58,11 @@ describe('GetMapEventsHandler', () => {
       events: [],
       clusters: []
     });
-    expect(cache.getMany).toHaveBeenCalledWith(
+    expect(cacheGetMany).toHaveBeenCalledWith(
       'event_map_sector',
       expect.arrayContaining([expect.stringMatching(/^v1:\d{4}-\d{2}-\d{2}:ALL:9:/)])
     );
-    expect(cache.setMany).toHaveBeenCalledTimes(1);
+    expect(cacheSetMany).toHaveBeenCalledTimes(1);
   });
 
   it('includes city, regional and national reach at a country-level zoom', async () => {
@@ -75,14 +77,14 @@ describe('GetMapEventsHandler', () => {
 
   it('uses the same sector keys for fractional movement within a zoom level', async () => {
     await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10.1, 0));
-    const firstKeys = (cache.getMany as jest.Mock).mock.calls.at(-1)?.[1];
+    const firstKeys = cacheGetMany.mock.calls.at(-1)?.[1] as string[] | undefined;
     await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10.9, 0));
-    const secondKeys = (cache.getMany as jest.Mock).mock.calls.at(-1)?.[1];
+    const secondKeys = cacheGetMany.mock.calls.at(-1)?.[1] as string[] | undefined;
     expect(secondKeys).toEqual(firstKeys);
   });
 
   it('serves a fully cached sector coverage without querying PostGIS', async () => {
-    (cache.getMany as jest.Mock).mockImplementationOnce((_namespace: string, keys: string[]) =>
+    cacheGetMany.mockImplementationOnce((_namespace: string, keys: string[]) =>
       Promise.resolve(
         new Map(
           keys.map((key, index) => [
@@ -104,6 +106,7 @@ describe('GetMapEventsHandler', () => {
                     photos: [],
                     status: 'PUBLISHED',
                     verificationStatus: 'VERIFIED',
+                    submittedByIsOrganizer: false,
                     createdAt: new Date().toISOString(),
                     distanceKm: 0,
                     reachKm: 150,
@@ -119,7 +122,8 @@ describe('GetMapEventsHandler', () => {
     const result = await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10, 0));
     expect(execute).not.toHaveBeenCalled();
     expect(result.events).toHaveLength(1);
-    expect(result.events[0]).toMatchObject({ id: 'cached-event', distanceKm: expect.any(Number) });
+    expect(result.events[0]).toMatchObject({ id: 'cached-event' });
+    expect(typeof result.events[0].distanceKm).toBe('number');
   });
 
   it('rejects inverted viewport bounds', async () => {

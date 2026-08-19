@@ -12,6 +12,9 @@ import { KeycloakAccountManagementService } from './infrastructure/keycloak-acco
 import { AccountDeletionWorker } from './services/account-deletion.worker';
 import { UserSettingsController } from './user-settings.controller';
 import { UserSettingsService } from './services/user-settings.service';
+import { EventsModule } from '../events/events.module';
+import { CreatorFollowService } from './services/creator-follow.service';
+import { CreatorFollowsController } from './creator-follows.controller';
 
 /**
  * UserModule
@@ -22,13 +25,14 @@ import { UserSettingsService } from './services/user-settings.service';
  * - Phone verification
  */
 @Module({
-  imports: [DrizzleModule, StorageModule, SafetyModule],
-  controllers: [UserController, AccountController, UserSettingsController],
+  imports: [DrizzleModule, StorageModule, SafetyModule, EventsModule],
+  controllers: [UserController, AccountController, UserSettingsController, CreatorFollowsController],
   providers: [
     ProfileService,
     AccountLifecycleService,
     AccountDeletionWorker,
     UserSettingsService,
+    CreatorFollowService,
     KeycloakAccountManagementService,
     DevelopmentEmailPhoneVerificationDelivery,
     { provide: PhoneVerificationDelivery, useExisting: DevelopmentEmailPhoneVerificationDelivery }

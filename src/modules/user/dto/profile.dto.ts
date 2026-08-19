@@ -156,7 +156,7 @@ export class ProfileResponseDto {
   id: string;
 
   @ApiProperty()
-  accountType: 'personal';
+  accountType: 'personal' | 'business';
 
   @ApiProperty()
   firstName?: string;
@@ -209,6 +209,12 @@ export class PublicProfileResponseDto {
   @ApiProperty()
   id: string;
 
+  @ApiProperty({ enum: ['personal', 'business'] })
+  accountType: 'personal' | 'business';
+
+  @ApiProperty()
+  displayName: string;
+
   @ApiProperty({ required: false })
   firstName?: string;
 
@@ -236,6 +242,69 @@ export class PublicProfileResponseDto {
   @ApiProperty()
   isPrivate: boolean;
 
+  @ApiProperty({ description: 'True when the profile has submitted at least one event and may be followed.' })
+  isCreator: boolean;
+
+  @ApiProperty({ description: 'True when the authenticated viewer follows this creator.' })
+  isFollowedByMe: boolean;
+
+  @ApiProperty()
+  isMe: boolean;
+
+  @ApiProperty({ description: 'Whether the viewer may see this profile attendance history.' })
+  canViewAttendance: boolean;
+
   @ApiProperty()
   createdAt: Date;
+}
+
+export class FollowedProfileDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty({ enum: ['personal', 'business'] })
+  accountType: 'personal' | 'business';
+
+  @ApiProperty()
+  displayName: string;
+
+  @ApiProperty({ required: false })
+  username?: string;
+
+  @ApiProperty({ required: false })
+  avatarUrl?: string;
+
+  @ApiProperty()
+  followersCount: number;
+
+  @ApiProperty()
+  isCreator: boolean;
+
+  @ApiProperty()
+  followedAt: Date;
+}
+
+export class CursorFollowedProfilesDto {
+  @ApiProperty({ type: [FollowedProfileDto] })
+  items: FollowedProfileDto[];
+
+  @ApiProperty()
+  hasMore: boolean;
+
+  @ApiProperty({ required: false })
+  nextCursor?: string;
+}
+
+export class FollowCreatorResponseDto {
+  @ApiProperty()
+  profileId: string;
+
+  @ApiProperty()
+  isFollowing: boolean;
+
+  @ApiProperty()
+  followersCount: number;
+
+  @ApiProperty()
+  followingCount: number;
 }

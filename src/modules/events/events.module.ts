@@ -87,6 +87,7 @@ const queryHandlers = [
     { provide: EventEngagementRepository, useClass: DrizzleEventEngagementRepository },
     { provide: EventCommentRepository, useClass: DrizzleEventCommentRepository },
     { provide: EventPublicationPolicy, useClass: DrizzleEventPublicationPolicy }
-  ]
+  ],
+  exports: [EventReadService]
 })
 export class EventsModule {}

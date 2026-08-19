@@ -46,6 +46,7 @@ export interface CreateEventInput {
   startDate: Date;
   endDate?: Date;
   organizerKeycloakSub: string;
+  submittedByIsOrganizer?: boolean;
   location: EventLocationInput;
   price: PriceInput;
   amenities?: string[];
@@ -53,6 +54,7 @@ export interface CreateEventInput {
 }
 
 export interface ReviseEventInput {
+  submittedByIsOrganizer?: boolean;
   title: string;
   description: string;
   category: EventCategory;
@@ -70,6 +72,7 @@ export interface EventProps {
   category: EventCategory;
   period: EventPeriod;
   organizerKeycloakSub: string;
+  submittedByIsOrganizer: boolean;
   location: EventLocation;
   price: Price;
   amenities: string[];
@@ -128,6 +131,7 @@ export class Event extends AggregateRoot<EventProps> {
         category: input.category,
         period,
         organizerKeycloakSub: input.organizerKeycloakSub,
+        submittedByIsOrganizer: input.submittedByIsOrganizer ?? false,
         location,
         price,
         amenities: input.amenities ?? [],
@@ -180,6 +184,7 @@ export class Event extends AggregateRoot<EventProps> {
     }
 
     this.props.title = input.title.trim();
+    this.props.submittedByIsOrganizer = input.submittedByIsOrganizer ?? this.props.submittedByIsOrganizer;
     this.props.description = input.description.trim();
     this.props.category = input.category;
     this.props.period = EventPeriod.create(input.startDate, input.endDate);
@@ -294,6 +299,10 @@ export class Event extends AggregateRoot<EventProps> {
 
   get organizerKeycloakSub(): string {
     return this.props.organizerKeycloakSub;
+  }
+
+  get submittedByIsOrganizer(): boolean {
+    return this.props.submittedByIsOrganizer;
   }
 
   get location(): EventLocation {
