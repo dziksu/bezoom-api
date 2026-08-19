@@ -30,7 +30,8 @@
     "db:generate": "npx drizzle-kit generate",
     "db:migrate": "npx drizzle-kit migrate",
     "db:push": "npx drizzle-kit push",
-    "db:seed": "ts-node --transpile-only scripts/seed.ts"
+    "db:seed": "ts-node --transpile-only scripts/seed.ts",
+    "db:seed:event-social-load": "ts-node --transpile-only scripts/seed-event-social-load.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",
