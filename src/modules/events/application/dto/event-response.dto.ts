@@ -290,6 +290,28 @@ export class AttendingEventDto extends EventResponseDto {
   myRsvpStatus: string;
 }
 
+export class MyEventStatsDto {
+  @ApiProperty({ description: 'Exact number of non-archived events created by the current user' })
+  created: number;
+
+  @ApiProperty({ description: 'Exact number of visible events the current user is attending' })
+  attending: number;
+
+  @ApiProperty({ description: 'Exact number of visible events saved by the current user' })
+  saved: number;
+}
+
+export class EventViewerStateDto {
+  @ApiProperty()
+  liked: boolean;
+
+  @ApiProperty()
+  saved: boolean;
+
+  @ApiProperty({ enum: ['MAYBE', 'CONFIRMED', 'DECLINED'], nullable: true })
+  rsvpStatus: 'MAYBE' | 'CONFIRMED' | 'DECLINED' | null;
+}
+
 export class CursorEventsDto {
   @ApiProperty({ type: [EventResponseDto] })
   items: EventResponseDto[];

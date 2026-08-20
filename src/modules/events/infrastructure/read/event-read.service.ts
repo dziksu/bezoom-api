@@ -19,7 +19,9 @@ import type {
   EventDetailDto,
   EventPhotoResponseDto,
   AttendingEventDto,
-  EventCreatorResponseDto
+  EventCreatorResponseDto,
+  MyEventStatsDto,
+  EventViewerStateDto
 } from '../../application/dto/event-response.dto';
 
 type EventRow = typeof events.$inferSelect;
@@ -45,6 +47,139 @@ export class EventReadService {
 
   private get db() {
     return this.readService.db;
+  }
+
+  async getMyStats(sub: string): Promise<MyEventStatsDto> {
+    const result: unknown = await this.db.execute(sql`
+      SELECT
+        (
+          SELECT count(*)::int
+          FROM ${events} created_event
+          WHERE created_event.organizer_keycloak_sub = ${sub}
+            AND created_event.archived_at IS NULL
+        ) AS created,
+        (
+          SELECT count(*)::int
+          FROM ${eventParticipants} participant
+          JOIN ${events} attending_event ON attending_event.id = participant.event_id
+          WHERE participant.keycloak_sub = ${sub}
+            AND participant.status <> 'DECLINED'
+            AND attending_event.status = 'PUBLISHED'
+            AND attending_event.media_pipeline_status = 'READY'
+            AND attending_event.verification_status = 'VERIFIED'
+            AND attending_event.visibility = 'PUBLIC'
+            AND attending_event.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM ${userBlocks} attendance_block
+              WHERE (
+                attendance_block.blocker_keycloak_sub = ${sub}
+                AND attendance_block.blocked_keycloak_sub = attending_event.organizer_keycloak_sub
+              ) OR (
+                attendance_block.blocked_keycloak_sub = ${sub}
+                AND attendance_block.blocker_keycloak_sub = attending_event.organizer_keycloak_sub
+              )
+            )
+        ) AS attending,
+        (
+          SELECT count(*)::int
+          FROM ${eventSaves} saved_event
+          JOIN ${events} saved_event_details ON saved_event_details.id = saved_event.event_id
+          WHERE saved_event.keycloak_sub = ${sub}
+            AND saved_event_details.status = 'PUBLISHED'
+            AND saved_event_details.media_pipeline_status = 'READY'
+            AND saved_event_details.verification_status = 'VERIFIED'
+            AND saved_event_details.visibility = 'PUBLIC'
+            AND saved_event_details.archived_at IS NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM ${userBlocks} saved_block
+              WHERE (
+                saved_block.blocker_keycloak_sub = ${sub}
+                AND saved_block.blocked_keycloak_sub = saved_event_details.organizer_keycloak_sub
+              ) OR (
+                saved_block.blocked_keycloak_sub = ${sub}
+                AND saved_block.blocker_keycloak_sub = saved_event_details.organizer_keycloak_sub
+              )
+            )
+        ) AS saved
+    `);
+    const row = (
+      result as {
+        rows: Array<{ created: number | string; attending: number | string; saved: number | string }>;
+      }
+    ).rows[0];
+
+    return {
+      created: Number(row?.created ?? 0),
+      attending: Number(row?.attending ?? 0),
+      saved: Number(row?.saved ?? 0)
+    };
+  }
+
+  async getViewerState(eventId: string, sub: string): Promise<EventViewerStateDto | null> {
+    const result: unknown = await this.db.execute(sql`
+      SELECT
+        EXISTS (
+          SELECT 1
+          FROM ${eventLikes} event_like
+          WHERE event_like.event_id = visible_event.id
+            AND event_like.keycloak_sub = ${sub}
+        ) AS liked,
+        EXISTS (
+          SELECT 1
+          FROM ${eventSaves} event_save
+          WHERE event_save.event_id = visible_event.id
+            AND event_save.keycloak_sub = ${sub}
+        ) AS saved,
+        (
+          SELECT participant.status
+          FROM ${eventParticipants} participant
+          WHERE participant.event_id = visible_event.id
+            AND participant.keycloak_sub = ${sub}
+        ) AS rsvp_status
+      FROM ${events} visible_event
+      WHERE visible_event.id = ${eventId}
+        AND visible_event.status = 'PUBLISHED'
+        AND visible_event.media_pipeline_status = 'READY'
+        AND visible_event.verification_status = 'VERIFIED'
+        AND visible_event.visibility = 'PUBLIC'
+        AND visible_event.archived_at IS NULL
+        AND EXISTS (
+          SELECT 1
+          FROM ${profiles} organizer
+          WHERE organizer.keycloak_sub = visible_event.organizer_keycloak_sub
+            AND organizer.account_status = 'ACTIVE'
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM ${userBlocks} viewer_block
+          WHERE (
+            viewer_block.blocker_keycloak_sub = ${sub}
+            AND viewer_block.blocked_keycloak_sub = visible_event.organizer_keycloak_sub
+          ) OR (
+            viewer_block.blocked_keycloak_sub = ${sub}
+            AND viewer_block.blocker_keycloak_sub = visible_event.organizer_keycloak_sub
+          )
+        )
+    `);
+    const row = (
+      result as {
+        rows: Array<{
+          liked: boolean;
+          saved: boolean;
+          rsvp_status: EventViewerStateDto['rsvpStatus'];
+        }>;
+      }
+    ).rows[0];
+
+    return row
+      ? {
+          liked: row.liked,
+          saved: row.saved,
+          rsvpStatus: row.rsvp_status
+        }
+      : null;
   }
 
   async findDetailById(id: string, viewerKeycloakSub?: string): Promise<EventDetailDto | null> {

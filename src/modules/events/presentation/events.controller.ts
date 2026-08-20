@@ -32,7 +32,9 @@ import {
   CursorEventsDto,
   CursorAttendingEventsDto,
   EventLifecycleResponseDto,
-  MapEventsResponseDto
+  MapEventsResponseDto,
+  MyEventStatsDto,
+  EventViewerStateDto
 } from '../application/dto/event-response.dto';
 import { CreateEventCommand } from '../application/commands/create-event/create-event.command';
 import { RequestPhotoUploadsCommand } from '../application/commands/request-photo-uploads/request-photo-uploads.command';
@@ -52,6 +54,8 @@ import { ListMyCreatedEventsQuery } from '../application/queries/list-my-created
 import { ListMyAttendingEventsQuery } from '../application/queries/list-my-attending-events/list-my-attending-events.query';
 import { ListMyLikedEventsQuery } from '../application/queries/list-my-liked-events/list-my-liked-events.query';
 import { ListMySavedEventsQuery } from '../application/queries/list-my-saved-events/list-my-saved-events.query';
+import { GetMyEventStatsQuery } from '../application/queries/get-my-event-stats/get-my-event-stats.query';
+import { GetEventViewerStateQuery } from '../application/queries/get-event-viewer-state/get-event-viewer-state.query';
 
 @ApiTags('Events')
 @ApiBearerAuth('JWT-auth')
@@ -262,6 +266,16 @@ export class EventsController {
     );
   }
 
+  @ApiOperation({
+    summary: 'Get my event statistics',
+    description: 'Returns exact created, attending and saved event counts without loading event lists.'
+  })
+  @ApiResponse({ status: 200, description: 'My event statistics', type: MyEventStatsDto })
+  @Get('me/stats')
+  async getMyStats(@CurrentUser() user: ICurrentUser): Promise<MyEventStatsDto> {
+    return this.queryBus.execute(new GetMyEventStatsQuery(user.id));
+  }
+
   @ApiOperation({ summary: 'List events I created', description: 'Events organized by the current user (any status).' })
   @ApiResponse({ status: 200, description: 'My created events', type: CursorEventsDto })
   @Get('me/created')
@@ -294,6 +308,21 @@ export class EventsController {
   @Get('me/saved')
   async listMySaved(@CurrentUser() user: ICurrentUser, @Query() query: CursorQueryDto): Promise<CursorEventsDto> {
     return this.queryBus.execute(new ListMySavedEventsQuery(user.id, query.cursor, query.limit ?? 20));
+  }
+
+  @ApiOperation({
+    summary: 'Get my state for an event',
+    description: 'Returns whether the current user liked, saved or RSVP’d to the event without loading user lists.'
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'My event state', type: EventViewerStateDto })
+  @ApiResponse({ status: 404, description: 'Event not found' })
+  @Get(':id/viewer-state')
+  async getViewerState(
+    @CurrentUser() user: ICurrentUser,
+    @Param('id', ParseUUIDPipe) id: string
+  ): Promise<EventViewerStateDto> {
+    return this.queryBus.execute(new GetEventViewerStateQuery(id, user.id));
   }
 
   @ApiOperation({

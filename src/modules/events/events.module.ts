@@ -31,6 +31,8 @@ import { ListMyCreatedEventsHandler } from './application/queries/list-my-create
 import { ListMyAttendingEventsHandler } from './application/queries/list-my-attending-events/list-my-attending-events.handler';
 import { ListMyLikedEventsHandler } from './application/queries/list-my-liked-events/list-my-liked-events.handler';
 import { ListMySavedEventsHandler } from './application/queries/list-my-saved-events/list-my-saved-events.handler';
+import { GetMyEventStatsHandler } from './application/queries/get-my-event-stats/get-my-event-stats.handler';
+import { GetEventViewerStateHandler } from './application/queries/get-event-viewer-state/get-event-viewer-state.handler';
 import {
   ListEventCommentsHandler,
   ListEventLikesHandler,
@@ -63,6 +65,8 @@ const queryHandlers = [
   SearchEventsByLocationHandler,
   GetMapEventsHandler,
   GetEventByIdHandler,
+  GetEventViewerStateHandler,
+  GetMyEventStatsHandler,
   ListMyCreatedEventsHandler,
   ListMyAttendingEventsHandler,
   ListMyLikedEventsHandler,
