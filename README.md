@@ -41,6 +41,27 @@ docker compose --profile observability up -d
 - Mailpit: `http://localhost:8025`
 - MinIO Console: `http://localhost:9001`
 
+## Uruchomienie pod większym obciążeniem
+
+Lokalnie `PROCESS_ROLE=all` utrzymuje HTTP i zadania tła w jednym procesie. W produkcji należy uruchamiać co najmniej dwa osobne deploymenty z tego samego obrazu:
+
+- repliki HTTP z `PROCESS_ROLE=api`, skalowane horyzontalnie za load balancerem;
+- repliki z `PROCESS_ROLE=worker`, które wykonują projekcję statystyk, dispatch outboxa, pipeline mediów i usuwanie kont. Deployment workera nie powinien być wystawiony publicznie.
+
+Każdy proces utrzymuje osobne pule read/write. Ich limity konfiguruje się przez `DATABASE_READ_MAX_CONNECTIONS` i `DATABASE_WRITE_MAX_CONNECTIONS`; suma limitów wszystkich replik musi mieścić się w budżecie PostgreSQL. Przy większej liczbie replik rekomendowany jest PgBouncer w trybie transaction pooling. Timeouty połączenia, bezczynności, statementu i całego query mają osobne zmienne opisane w `.env.example`.
+
+W produkcji kolejki BullMQ powinny używać trwałego Redisa bez eviction (`REDIS_QUEUE_URL`), a cache i distributed rate limiting niezależnych instancji (`REDIS_CACHE_URL`, `REDIS_RATE_LIMIT_URL`). `REDIS_URL` pozostaje wspólnym fallbackiem wygodnym dla środowiska lokalnego.
+
+Endpoint mapy odrzuca zbyt duże viewporty i zwraca kompaktowe pinezki wraz z jednym URL-em covera. API nie klastruje wydarzeń ani nie decyduje o sposobie ich prezentacji — frontend wybiera kropkę, ikonę lub wyróżniony pin ze zdjęciem. Publiczne odczyty discovery mają krótki cache HTTP, kompresję oraz rozproszony limit żądań. Zmiany szkiców i pipeline mediów nie unieważniają już globalnie cache mapy; wersja jest podbijana dopiero, gdy event wchodzi do publicznej mapy albo ją opuszcza.
+
+Powtarzalny smoke/load test można uruchomić przeciw działającemu API:
+
+```bash
+LOAD_TEST_CONCURRENCY=25 LOAD_TEST_DURATION_SECONDS=60 pnpm test:load
+```
+
+Test miesza mapę, geo-search i liveness, raportuje RPS, błędy, p50/p95/p99 oraz rozmiar odpowiedzi i kończy się błędem po przekroczeniu domyślnego p95 300 ms albo 1% błędów. Progi można zmienić przez `LOAD_TEST_MAX_P95_MS` i `LOAD_TEST_MAX_ERROR_RATE`. Przed testem o większej intensywności trzeba świadomie ustawić adekwatne limity `EVENT_MAP_RATE_LIMIT_PER_MINUTE` i `EVENT_SEARCH_RATE_LIMIT_PER_MINUTE`.
+
 ## Realistyczny seed danych
 
 Seed tworzy przekrojowy obraz rosnącej aplikacji eventowej w Polsce: profile zakładane w ciągu ostatnich 18 miesięcy, coraz liczniejszą grupę twórców, wszystkie kategorie eventów oraz aktywność o nierównym rozkładzie popularności. Profile `demo` i `development` korzystają z ważonego zestawu 18 największych miast. Profil `performance` rozkłada eventy równomiernie między 50 ośrodków w całej Polsce, bez dominującego klastra; 40% eventów ma rozbudowany, wieloakapitowy opis, a 45% galerię z 2–3 zdjęciami. Daty eventów są zawsze liczone względem chwili uruchomienia — obejmują historię, bieżący tydzień i kolejne miesiące. Dane mają stabilne UUID i są oznaczone technicznym prefiksem `seed:v1:`, więc ponowne uruchomienie usuwa wyłącznie poprzedni seed, nie dane utworzone ręcznie.
@@ -134,7 +155,7 @@ Bezpośredni `delete_account` w Keycloak pozostaje wyłączony, ponieważ nie ob
 
 ## Zasady publikacji eventu
 
-Nowy event nie staje się publiczny automatycznie. Przechodzi przez upload, moderację/weryfikację i przygotowanie mediów. Feed, wyszukiwanie, szczegóły oraz engagement dopuszczają tylko eventy publiczne, opublikowane, zweryfikowane i z mediami `READY`. Promień MVP wynosi stałe 5 km i nie może zostać kupiony ani ustawiony przez klienta.
+Nowy event nie staje się publiczny automatycznie. Przechodzi przez upload, moderację/weryfikację i przygotowanie mediów. Feed, wyszukiwanie, szczegóły oraz engagement dopuszczają tylko eventy publiczne, opublikowane, zweryfikowane i z mediami `READY`. Początkowy promień MVP wynosi 1 km i nie może zostać kupiony ani ustawiony przez klienta.
 
 Lokalnie `event.created` jest przekazywany transakcyjnym outboxem do BullMQ, a developerski worker kopiuje media z prywatnego bucketu `raw-uploads` do `media` i ustawia `READY`. Użytkownik publikuje gotowy event przez `POST /api/events/:id/publish`; wymagany jest zweryfikowany telefon. `development_passthrough` jest twardo blokowany przy `NODE_ENV=production` — produkcja wymaga prawdziwej moderacji oraz bezpiecznego dekodowania i ponownego kodowania obrazu.
 

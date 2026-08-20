@@ -17,6 +17,15 @@ export const eventOutbox = pgTable(
     index('event_outbox_aggregate_type_idx').on(table.aggregateId, table.eventType),
     index('event_outbox_pending_idx')
       .on(table.occurredAt)
-      .where(sql`${table.processedAt} IS NULL`)
+      .where(sql`${table.processedAt} IS NULL`),
+    index('event_outbox_pending_type_order_idx')
+      .on(table.eventType, table.occurredAt, table.id)
+      .where(sql`${table.processedAt} IS NULL`),
+    index('event_outbox_pending_aggregate_order_idx')
+      .on(table.aggregateId, table.eventType, table.occurredAt, table.id)
+      .where(sql`${table.processedAt} IS NULL`),
+    index('event_outbox_processed_order_idx')
+      .on(table.processedAt, table.id)
+      .where(sql`${table.processedAt} IS NOT NULL`)
   ]
 );

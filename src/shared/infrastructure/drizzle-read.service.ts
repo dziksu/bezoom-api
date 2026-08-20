@@ -27,7 +27,12 @@ export class DrizzleReadService implements OnModuleDestroy {
 
     this.pool = new Pool({
       connectionString: readUrl,
-      max: this.configService.get<number>('database.maxConnections', 10),
+      max: this.configService.get<number>('database.readMaxConnections', 10),
+      connectionTimeoutMillis: this.configService.get<number>('database.connectionTimeoutMs', 2_000),
+      idleTimeoutMillis: this.configService.get<number>('database.idleTimeoutMs', 30_000),
+      statement_timeout: this.configService.get<number>('database.statementTimeoutMs', 5_000),
+      query_timeout: this.configService.get<number>('database.queryTimeoutMs', 5_500),
+      application_name: 'bezoom-api-read',
       ssl: this.configService.get<boolean>('database.ssl') ? { rejectUnauthorized: false } : undefined
     });
 
@@ -42,5 +47,13 @@ export class DrizzleReadService implements OnModuleDestroy {
 
   async ping(): Promise<void> {
     await this.db.execute(sql`select 1`);
+  }
+
+  getPoolStats() {
+    return {
+      total: this.pool.totalCount,
+      idle: this.pool.idleCount,
+      waiting: this.pool.waitingCount
+    };
   }
 }

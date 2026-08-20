@@ -97,6 +97,11 @@ export const events = pgTable(
       .on(table.startDate, table.id)
       .where(
         sql`${table.status} = 'PUBLISHED' AND ${table.visibility} = 'PUBLIC' AND ${table.verificationStatus} = 'VERIFIED' AND ${table.mediaPipelineStatus} = 'READY' AND ${table.archivedAt} IS NULL`
+      ),
+    index('events_public_discovery_reach_idx')
+      .on(table.radiusKm, table.startDate, table.id)
+      .where(
+        sql`${table.status} = 'PUBLISHED' AND ${table.visibility} = 'PUBLIC' AND ${table.verificationStatus} = 'VERIFIED' AND ${table.mediaPipelineStatus} = 'READY' AND ${table.archivedAt} IS NULL`
       )
   ]
 );

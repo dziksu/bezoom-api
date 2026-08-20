@@ -10,9 +10,10 @@ import { QueueName } from './queue-names';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         connection: {
-          host: configService.get<string>('redis.host', 'localhost'),
-          port: configService.get<number>('redis.port', 6379),
-          password: configService.get<string>('redis.password')
+          host: configService.get<string>('redis.queueHost', 'localhost'),
+          port: configService.get<number>('redis.queuePort', 6379),
+          password: configService.get<string>('redis.queuePassword'),
+          tls: configService.get<Record<string, never> | undefined>('redis.queueTls')
         }
       }),
       inject: [ConfigService]

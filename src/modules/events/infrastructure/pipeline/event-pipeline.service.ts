@@ -47,7 +47,7 @@ export class EventPipelineService {
     event.verify();
     event.markReady();
     await this.repository.updateLifecycle(event);
-    await Promise.all([this.cache.delete('event_detail', event.id), this.cache.incrementVersion('event_map')]);
+    await this.cache.delete('event_detail', event.id);
 
     this.logger.log('EVENT_PIPELINE_READY');
   }

@@ -10,8 +10,10 @@ import {
   Patch,
   Post,
   Put,
-  Query
+  Query,
+  Res
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { CommandBus, QueryBus } from '@nestjs/cqrs';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, OptionalAuth } from '@api/shared/infrastructure/auth';
@@ -197,15 +199,27 @@ export class EventsController {
   @ApiOperation({
     summary: 'Get event pins for a map viewport',
     description:
-      'Returns city, regional and national pins at country zoom. Local pins join from regional zoom onward. Pins are never clustered. This endpoint is viewport-based and intentionally has no text-search parameter.'
+      'Returns compact pins with cover URLs for the viewport. The frontend decides whether each event is rendered as a dot, icon or highlighted photo pin. City, regional and national pins are shown at country zoom; lower-reach pins join after zooming in. Oversized viewport and count bounds are rejected.'
   })
-  @ApiResponse({ status: 200, description: 'Map pins and exact visible total', type: MapEventsResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Compact map pins and an exact visible total',
+    type: MapEventsResponseDto
+  })
   @OptionalAuth()
   @Get('map')
+  @RedisRateLimit({
+    name: 'event_map_ip',
+    limit: Number(process.env.EVENT_MAP_RATE_LIMIT_PER_MINUTE ?? 3_000),
+    windowSeconds: 60,
+    scopes: ['ip']
+  })
   async getMapEvents(
     @Query() query: MapEventsQueryDto,
-    @CurrentUser() user?: ICurrentUser
+    @CurrentUser() user: ICurrentUser | undefined,
+    @Res({ passthrough: true }) response: Response
   ): Promise<MapEventsResponseDto> {
+    this.setDiscoveryCacheHeaders(response, user);
     return this.queryBus.execute(
       new GetMapEventsQuery(
         query.west,
@@ -231,10 +245,18 @@ export class EventsController {
   @ApiResponse({ status: 200, description: 'Matching events', type: EventSearchResponseDto })
   @OptionalAuth()
   @Get('search')
+  @RedisRateLimit({
+    name: 'event_search_ip',
+    limit: Number(process.env.EVENT_SEARCH_RATE_LIMIT_PER_MINUTE ?? 6_000),
+    windowSeconds: 60,
+    scopes: ['ip']
+  })
   async searchEvents(
     @Query() query: SearchEventsQueryDto,
-    @CurrentUser() user?: ICurrentUser
+    @CurrentUser() user: ICurrentUser | undefined,
+    @Res({ passthrough: true }) response: Response
   ): Promise<EventSearchResponseDto> {
+    this.setDiscoveryCacheHeaders(response, user);
     return this.queryBus.execute(
       new SearchEventsByLocationQuery(query.lat, query.lng, query.week, query.cursor, query.limit ?? 20, user?.id)
     );
@@ -364,5 +386,10 @@ export class EventsController {
     @Param('id', ParseUUIDPipe) id: string
   ): Promise<RsvpResponseDto> {
     return this.commandBus.execute(new SetRsvpCommand(id, user.id, null));
+  }
+
+  private setDiscoveryCacheHeaders(response: Response, user?: ICurrentUser): void {
+    response.vary('Authorization');
+    response.setHeader('Cache-Control', user ? 'private, no-store' : 'public, max-age=15, stale-while-revalidate=30');
   }
 }

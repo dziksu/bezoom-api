@@ -20,10 +20,7 @@ export function sectorZoomForMapZoom(mapZoom: number): number {
 }
 
 export function sectorsForBounds(bounds: MapSectorBounds, zoom: number): MapSector[] {
-  const westX = longitudeToTileX(bounds.west, zoom);
-  const eastX = longitudeToTileX(bounds.east - BOUNDS_EPSILON, zoom);
-  const northY = latitudeToTileY(bounds.north - BOUNDS_EPSILON, zoom);
-  const southY = latitudeToTileY(bounds.south + BOUNDS_EPSILON, zoom);
+  const { westX, eastX, northY, southY } = sectorRangeForBounds(bounds, zoom);
   const sectors: MapSector[] = [];
 
   for (let x = westX; x <= eastX; x += 1) {
@@ -34,15 +31,20 @@ export function sectorsForBounds(bounds: MapSectorBounds, zoom: number): MapSect
   return sectors;
 }
 
+/** Returns the allocation size before sectors are materialized. */
+export function countSectorsForBounds(bounds: MapSectorBounds, zoom: number): number {
+  const { westX, eastX, northY, southY } = sectorRangeForBounds(bounds, zoom);
+  return (eastX - westX + 1) * (southY - northY + 1);
+}
+
 export function sectorCacheKey(
   version: number,
   week: number | string | undefined,
   scope: 'CITY_PLUS' | 'ALL',
   sector: Pick<MapSector, 'zoom' | 'x' | 'y'>
 ): string {
-  // Reach model v2 adds the NEARBY level. Keep the Redis namespace separate
-  // from v1 so cached pins never carry an obsolete visibility level.
-  return `reach-v2:v${version}:${week ?? 'all'}:${scope}:${sector.zoom}:${sector.x}:${sector.y}`;
+  // v4 stores compact pins with the required cover URL and no backend clustering.
+  return `map-v4:v${version}:${week ?? 'all'}:${scope}:${sector.zoom}:${sector.x}:${sector.y}`;
 }
 
 export function boundsCoveringSectors(sectors: MapSector[]): MapSectorBounds {
@@ -87,4 +89,13 @@ function tileBounds(x: number, y: number, zoom: number): MapSectorBounds {
 
 function tileYToLatitude(y: number, tiles: number): number {
   return (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / tiles))) * 180) / Math.PI;
+}
+
+function sectorRangeForBounds(bounds: MapSectorBounds, zoom: number) {
+  return {
+    westX: longitudeToTileX(bounds.west, zoom),
+    eastX: longitudeToTileX(bounds.east - BOUNDS_EPSILON, zoom),
+    northY: latitudeToTileY(bounds.north - BOUNDS_EPSILON, zoom),
+    southY: latitudeToTileY(bounds.south + BOUNDS_EPSILON, zoom)
+  };
 }

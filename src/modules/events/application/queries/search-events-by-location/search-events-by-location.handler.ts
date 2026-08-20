@@ -14,6 +14,7 @@ import { NATIONAL_EVENT_REACH_RADIUS_KM } from '../../../domain/event.aggregate'
 // The maximum national reach bounds the indexed candidate scan. Each event is
 // then filtered against its own reach, so Nearby events stay truly nearby.
 export const MAX_DISCOVERY_RADIUS_METERS = NATIONAL_EVENT_REACH_RADIUS_KM * 1000;
+export const LOCAL_DISCOVERY_RADIUS_METERS = 5_000;
 
 interface SearchRow {
   [key: string]: unknown;
@@ -82,30 +83,15 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           ST_SetSRID(ST_MakePoint(${query.lng}, ${query.lat}), 4326)::geography AS origin,
           (date_trunc('week', (now() AT TIME ZONE 'Europe/Warsaw')) + (${week} * interval '7 days')) AS week_start
       )
-      , nearby AS MATERIALIZED (
-        SELECT
-          l.event_id, l.latitude, l.longitude, l.address, l.city, l.country,
-          p.week_start,
-          ST_Distance(l.geog, p.origin, false) AS distance_m
+      , eligible_events AS NOT MATERIALIZED (
+        SELECT e.id, e.radius_km, organizer.id AS organizer_id
         FROM params p
-        JOIN locations l ON ST_DWithin(l.geog, p.origin, ${MAX_DISCOVERY_RADIUS_METERS}, false)
-      )
-      , candidates AS (
-        SELECT
-          e.id, e.title, e.description, e.category, e.start_date, e.end_date,
-          organizer.id AS organizer_id, e.submitted_by_is_organizer, e.price_type, e.price_min, e.price_max, e.currency,
-          e.ticket_url, e.price_notes, e.amenities, e.status,
-          e.verification_status, e.created_at,
-          l.latitude, l.longitude, l.address, l.city, l.country,
-          l.distance_m
-        FROM nearby l
-        JOIN events e ON e.id = l.event_id
+        JOIN events e ON true
         JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
         WHERE e.status = 'PUBLISHED'
           AND e.verification_status = 'VERIFIED'
           AND e.visibility = 'PUBLIC'
           AND e.media_pipeline_status = 'READY'
-          AND l.distance_m <= e.radius_km * 1000
           AND e.archived_at IS NULL
           AND e.start_date > now()
           AND organizer.account_status = 'ACTIVE'
@@ -120,10 +106,42 @@ export class SearchEventsByLocationHandler implements IQueryHandler<
           )
           AND (
             ${weekIsNull} OR (
-              (e.start_date AT TIME ZONE 'Europe/Warsaw') >= l.week_start
-              AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < l.week_start + interval '7 days'
+              (e.start_date AT TIME ZONE 'Europe/Warsaw') >= p.week_start
+              AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < p.week_start + interval '7 days'
             )
           )
+      )
+      , nearby AS MATERIALIZED (
+        SELECT
+          l.event_id, l.latitude, l.longitude, l.address, l.city, l.country,
+          eligible.organizer_id,
+          ST_Distance(l.geog, p.origin, false) AS distance_m
+        FROM params p
+        JOIN locations l ON ST_DWithin(l.geog, p.origin, ${LOCAL_DISCOVERY_RADIUS_METERS}, false)
+        JOIN eligible_events eligible ON eligible.id = l.event_id AND eligible.radius_km <= 5
+
+        UNION ALL
+
+        SELECT
+          l.event_id, l.latitude, l.longitude, l.address, l.city, l.country,
+          eligible.organizer_id,
+          ST_Distance(l.geog, p.origin, false) AS distance_m
+        FROM params p
+        JOIN eligible_events eligible ON eligible.radius_km > 5
+        JOIN locations l ON l.event_id = eligible.id
+        WHERE ST_DWithin(l.geog, p.origin, eligible.radius_km * 1000, false)
+      )
+      , candidates AS (
+        SELECT
+          e.id, e.title, e.description, e.category, e.start_date, e.end_date,
+          l.organizer_id, e.submitted_by_is_organizer, e.price_type, e.price_min, e.price_max, e.currency,
+          e.ticket_url, e.price_notes, e.amenities, e.status,
+          e.verification_status, e.created_at,
+          l.latitude, l.longitude, l.address, l.city, l.country,
+          l.distance_m
+        FROM nearby l
+        JOIN events e ON e.id = l.event_id
+        WHERE l.distance_m <= e.radius_km * 1000
       )
       SELECT * FROM candidates
       WHERE ${cursor?.distanceMeters ?? null}::double precision IS NULL

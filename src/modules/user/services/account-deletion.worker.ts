@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
 import type { AccountLifecycleConfig } from '@api/shared/infrastructure/config/account-lifecycle.config';
+import { backgroundWorkersEnabled, type RuntimeConfig } from '@api/shared/infrastructure/config/runtime.config';
 import {
   accountDeletionObjects,
   accountDeletions,
@@ -44,6 +45,7 @@ export class AccountDeletionWorker implements OnApplicationBootstrap, OnModuleDe
   ) {}
 
   onApplicationBootstrap(): void {
+    if (!backgroundWorkersEnabled(this.config.get<RuntimeConfig>('runtime'))) return;
     const intervalMs = this.settings().workerIntervalMs;
     this.triggerTick();
     this.timer = setInterval(() => this.triggerTick(), intervalMs);
@@ -119,6 +121,9 @@ export class AccountDeletionWorker implements OnApplicationBootstrap, OnModuleDe
 
   private async anonymizeDomainData(deletion: ClaimedDeletion): Promise<void> {
     const affectedEventIds = await this.write.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('statement_timeout', ${`${this.settings().workerStatementTimeoutMs}ms`}, true)`
+      );
       await tx.execute(sql`SELECT id FROM profiles WHERE id = ${deletion.profile_id} FOR UPDATE`);
       const [profile] = await tx
         .select({ avatarStoragePath: profiles.avatarStoragePath })
@@ -306,6 +311,9 @@ export class AccountDeletionWorker implements OnApplicationBootstrap, OnModuleDe
   private async finalizeIdentityDeletion(deletion: ClaimedDeletion): Promise<void> {
     const tombstone = `deleted:${deletion.profile_id}`;
     await this.write.db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('statement_timeout', ${`${this.settings().workerStatementTimeoutMs}ms`}, true)`
+      );
       await tx
         .update(events)
         .set({ organizerKeycloakSub: tombstone, updatedAt: new Date() })

@@ -56,12 +56,12 @@ describe('EventPipelineService', () => {
       storage as unknown as ObjectStorageService,
       cache as unknown as RedisCacheService
     );
-    return { service, repository, storage };
+    return { service, repository, storage, cache };
   };
 
   it('copies raw photos and moves the event to READY without publishing it', async () => {
     const event = createEvent();
-    const { service, repository, storage } = build(event);
+    const { service, repository, storage, cache } = build(event);
 
     await service.process(event.id);
 
@@ -70,6 +70,7 @@ describe('EventPipelineService', () => {
     expect(event.photos[0].status).toBe('READY');
     expect(storage.copyObject).toHaveBeenCalledTimes(1);
     expect(repository.updateLifecycle).toHaveBeenCalledWith(event);
+    expect(cache.incrementVersion).not.toHaveBeenCalled();
   });
 
   it('is idempotent once the event is ready', async () => {

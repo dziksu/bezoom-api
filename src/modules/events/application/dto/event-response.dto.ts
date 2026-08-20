@@ -157,7 +157,50 @@ export class EventSearchResponseDto {
   nextCursor?: string;
 }
 
-export class MapEventPinDto extends EventSearchResultDto {
+/** Compact map representation. Full event data is loaded from GET /events/:id. */
+export class MapEventPinDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  title: string;
+
+  @ApiProperty({ description: 'Public URL of the required event cover photo.' })
+  coverPhotoUrl: string;
+
+  @ApiProperty()
+  category: string;
+
+  @ApiProperty()
+  startDate: Date;
+
+  @ApiPropertyOptional()
+  endDate?: Date;
+
+  @ApiPropertyOptional({ deprecated: true, description: 'Deprecated alias of creatorId.' })
+  organizerId?: string;
+
+  @ApiPropertyOptional()
+  creatorId?: string;
+
+  @ApiProperty()
+  latitude: number;
+
+  @ApiProperty()
+  longitude: number;
+
+  @ApiPropertyOptional()
+  address?: string;
+
+  @ApiPropertyOptional()
+  city?: string;
+
+  @ApiProperty()
+  country: string;
+
+  @ApiProperty({ description: 'Distance from the viewport centre, in kilometres.' })
+  distanceKm: number;
+
   @ApiProperty({ description: 'Configured event reach in kilometres.' })
   reachKm: number;
 
@@ -197,10 +240,17 @@ export class MapEventClusterDto {
 }
 
 export class MapEventsResponseDto {
-  @ApiProperty({ type: [MapEventPinDto], description: 'Events visible at this zoom, ordered by reach.' })
+  @ApiProperty({
+    type: [MapEventPinDto],
+    description: 'Compact event pins visible at this zoom, ordered by reach. The frontend owns pin presentation.'
+  })
   events: MapEventPinDto[];
 
-  @ApiProperty({ type: [MapEventClusterDto], description: 'Deprecated; map events are no longer clustered.' })
+  @ApiProperty({
+    type: [MapEventClusterDto],
+    deprecated: true,
+    description: 'Deprecated compatibility field. Map events are not clustered by the API.'
+  })
   clusters: MapEventClusterDto[];
 
   @ApiProperty({
@@ -211,7 +261,7 @@ export class MapEventsResponseDto {
   @ApiProperty({ description: 'Number of event pins returned at the current zoom.' })
   returnedCount: number;
 
-  @ApiProperty({ description: 'Deprecated compatibility field; equals totalCount.' })
+  @ApiProperty({ description: 'Number of events represented by returned pins.' })
   representedCount: number;
 
   @ApiProperty({ description: 'Minimum reach in kilometres returned at this zoom.' })

@@ -3,30 +3,38 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
 import type { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
 import type { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
-import type { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import type { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
+import type { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import { GetMapEventsHandler } from './get-map-events.handler';
 import { GetMapEventsQuery } from './get-map-events.query';
 
 describe('GetMapEventsHandler', () => {
   let capturedStatements: SQL[] = [];
   let totalCountResult = 0;
+  let mapRows: Array<Record<string, unknown>> = [];
   const execute = jest.fn((statement: SQL) => {
     capturedStatements.push(statement);
     const normalizedSql = new PgDialect().sqlToQuery(statement).sql.replace(/\s+/g, ' ').toLowerCase();
     return Promise.resolve({
-      rows: normalizedSql.includes('select count(*)::int as count') ? [{ count: totalCountResult }] : [{ events: [] }]
+      rows: normalizedSql.includes('select count(*)::int as count') ? [{ count: totalCountResult }] : mapRows
     });
   });
   const readService = { db: { execute } } as unknown as DrizzleReadService;
   const writeService = { db: { execute } } as unknown as DrizzleWriteService;
-  const objectStorage = {} as ObjectStorageService;
+  const objectStorage = {
+    mediaBucket: 'bezoom-media',
+    getPublicUrl: jest.fn((bucket: string, key: string) => `https://media.test/${bucket}/${key}`)
+  } as unknown as ObjectStorageService;
   const cacheGetMany = jest.fn().mockResolvedValue(new Map());
   const cacheSetMany = jest.fn().mockResolvedValue(undefined);
+  const cacheGetOrSet = jest.fn((_namespace: string, _key: string, _ttl: number, loader: () => Promise<number>) =>
+    loader()
+  );
   const cache = {
     getVersion: jest.fn().mockResolvedValue(1),
     getMany: cacheGetMany,
-    setMany: cacheSetMany
+    setMany: cacheSetMany,
+    getOrSet: cacheGetOrSet
   } as unknown as RedisCacheService;
   const handler = new GetMapEventsHandler(readService, writeService, objectStorage, cache);
 
@@ -34,30 +42,25 @@ describe('GetMapEventsHandler', () => {
     jest.clearAllMocks();
     capturedStatements = [];
     totalCountResult = 0;
+    mapRows = [];
+    cacheGetMany.mockResolvedValue(new Map());
+    cacheGetOrSet.mockImplementation((_namespace: string, _key: string, _ttl: number, loader: () => Promise<number>) =>
+      loader()
+    );
   });
 
-  it('loads missing sectors in one spatial query without clustering or a hard limit', async () => {
+  it('loads compact pins with the geometry index and derives a same-viewport total', async () => {
     const result = await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10, 0));
 
-    const pinStatement = capturedStatements.find((statement) =>
-      new PgDialect().sqlToQuery(statement).sql.toLowerCase().includes('jsonb_agg')
-    );
-    const countStatement = capturedStatements.find((statement) =>
-      new PgDialect().sqlToQuery(statement).sql.toLowerCase().includes('count(*)::int')
-    );
-    if (!pinStatement || !countStatement) throw new Error('MAP_SQL_NOT_CAPTURED');
-    const normalizedPinSql = new PgDialect().sqlToQuery(pinStatement).sql.replace(/\s+/g, ' ').toLowerCase();
-    const normalizedCountSql = new PgDialect().sqlToQuery(countStatement).sql.replace(/\s+/g, ' ').toLowerCase();
-
-    expect(normalizedPinSql).toContain('join locations l on l.geog &&');
-    expect(normalizedPinSql).toContain('st_intersects(l.geog');
-    expect(normalizedPinSql).toContain('and e.radius_km >=');
-    expect(normalizedPinSql).not.toContain('cluster_members');
-    expect(normalizedPinSql).not.toContain('st_snaptogrid');
-    expect(normalizedPinSql).not.toContain(' limit ');
-    expect(normalizedPinSql).not.toContain('row_number()');
-    expect(normalizedCountSql).toContain('join locations l on l.geog &&');
-    expect(normalizedCountSql).not.toContain('radius_km');
+    expect(capturedStatements).toHaveLength(1);
+    const normalizedSql = new PgDialect().sqlToQuery(capturedStatements[0]).sql.replace(/\s+/g, ' ').toLowerCase();
+    expect(normalizedSql).toContain('join locations l on st_intersects(l.geom');
+    expect(normalizedSql).toContain('join lateral');
+    expect(normalizedSql).toContain("photo.status = 'ready'");
+    expect(normalizedSql).toContain('and e.radius_km >=');
+    expect(normalizedSql).not.toContain('jsonb_agg');
+    expect(normalizedSql).not.toContain('e.description');
+    expect(normalizedSql).not.toContain('count(*)');
     expect(result).toMatchObject({
       totalCount: 0,
       returnedCount: 0,
@@ -68,14 +71,45 @@ describe('GetMapEventsHandler', () => {
     });
     expect(cacheGetMany).toHaveBeenCalledWith(
       'event_map_sector',
-      expect.arrayContaining([expect.stringMatching(/^reach-v2:v1:\d{4}-\d{2}-\d{2}:ALL:9:/)])
+      expect.arrayContaining([expect.stringMatching(/^map-v4:v1:\d{4}-\d{2}-\d{2}:ALL:9:/)])
     );
     expect(cacheSetMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the required cover URL without loading full event details', async () => {
+    mapRows = [
+      {
+        id: 'event-with-cover',
+        title: 'Event with cover',
+        category: 'MUSIC_AND_NIGHTLIFE',
+        start_date: new Date(Date.now() + 86_400_000),
+        end_date: null,
+        organizer_id: 'organizer-id',
+        latitude: 52.2,
+        longitude: 21.05,
+        address: null,
+        city: 'Warszawa',
+        country: 'PL',
+        radius_km: 150,
+        cover_media_key: 'events/event-with-cover/cover.webp'
+      }
+    ];
+
+    const result = await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10, 0));
+
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0]).toMatchObject({
+      id: 'event-with-cover',
+      coverPhotoUrl: 'https://media.test/bezoom-media/events/event-with-cover/cover.webp'
+    });
+    expect(result.events[0]).not.toHaveProperty('description');
+    expect(result.events[0]).not.toHaveProperty('photos');
   });
 
   it('includes city, regional and national reach at a country-level zoom', async () => {
     const result = await handler.execute(new GetMapEventsQuery(14.1, 49, 24.2, 54.9, 5, undefined));
     expect(result.individualReachKm).toBe(25);
+    expect(cacheGetOrSet).toHaveBeenCalledTimes(1);
   });
 
   it('includes local reach from a regional-level zoom', async () => {
@@ -114,20 +148,12 @@ describe('GetMapEventsHandler', () => {
                   {
                     id: 'cached-event',
                     title: 'Cached event',
-                    description: 'Cached event description',
+                    coverPhotoUrl: 'https://media.test/cached-event.webp',
                     category: 'ENTERTAINMENT',
                     startDate: new Date(Date.now() + 86_400_000).toISOString(),
                     latitude: 52.2,
                     longitude: 21.05,
                     country: 'PL',
-                    priceType: 'FREE',
-                    currency: 'PLN',
-                    amenities: [],
-                    photos: [],
-                    status: 'PUBLISHED',
-                    verificationStatus: 'VERIFIED',
-                    submittedByIsOrganizer: false,
-                    createdAt: new Date().toISOString(),
                     distanceKm: 0,
                     reachKm: 150,
                     visibilityLevel: 'REGIONAL'
@@ -140,26 +166,52 @@ describe('GetMapEventsHandler', () => {
     );
 
     const result = await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10, 0));
-    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
     expect(result.events).toHaveLength(1);
     expect(result.returnedCount).toBe(1);
     expect(result.events[0]).toMatchObject({ id: 'cached-event' });
     expect(typeof result.events[0].distanceKm).toBe('number');
   });
 
-  it('counts every eligible event in the visible bounds without applying the reach threshold', async () => {
+  it('returns dense compact pins without moving frontend-owned events into clusters', async () => {
+    const future = new Date(Date.now() + 86_400_000).toISOString();
+    const cachedEvents = Array.from({ length: 600 }, (_, index) => ({
+      id: `event-${index}`,
+      title: `Event ${index}`,
+      coverPhotoUrl: `https://media.test/event-${index}.webp`,
+      category: 'ENTERTAINMENT',
+      startDate: future,
+      latitude: 52.01 + (index % 40) * 0.01,
+      longitude: 20.71 + (index % 50) * 0.01,
+      country: 'PL',
+      distanceKm: 0,
+      reachKm: index < 50 ? 150 : 1,
+      visibilityLevel: index < 50 ? 'REGIONAL' : 'NEARBY'
+    }));
+    cacheGetMany.mockImplementationOnce((_namespace: string, keys: string[]) =>
+      Promise.resolve(new Map(keys.map((key, index) => [key, index === 0 ? cachedEvents : []])))
+    );
+
+    const result = await handler.execute(new GetMapEventsQuery(20.7, 52, 21.3, 52.5, 10, 0));
+    expect(result.events).toHaveLength(600);
+    expect(result.clusters).toEqual([]);
+    expect(result.representedCount).toBe(600);
+  });
+
+  it('counts every eligible event in custom bounds and caches the anonymous result', async () => {
     totalCountResult = 37;
     const result = await handler.execute(
       new GetMapEventsQuery(20.5, 51.8, 21.5, 52.7, 5, 0, undefined, 20.8, 52.1, 21.2, 52.36)
     );
 
     expect(result.totalCount).toBe(37);
-    expect(result.returnedCount).toBe(0);
+    expect(cacheGetOrSet).toHaveBeenCalledTimes(1);
     const countStatement = capturedStatements.find((statement) =>
       new PgDialect().sqlToQuery(statement).sql.toLowerCase().includes('count(*)::int')
     );
     if (!countStatement) throw new Error('MAP_COUNT_SQL_NOT_CAPTURED');
     const compiled = new PgDialect().sqlToQuery(countStatement);
+    expect(compiled.sql.toLowerCase()).toContain('st_intersects(l.geom');
     expect(compiled.sql.toLowerCase()).not.toContain('radius_km');
     expect(compiled.params).toEqual(expect.arrayContaining([20.8, 52.1, 21.2, 52.36]));
   });
@@ -174,5 +226,12 @@ describe('GetMapEventsHandler', () => {
     await expect(handler.execute(new GetMapEventsQuery(20, 51, 22, 53, 10, 0, undefined, 20.5))).rejects.toBeInstanceOf(
       BadRequestException
     );
+  });
+
+  it('rejects a viewport whose zoom would materialize too many sectors', async () => {
+    await expect(handler.execute(new GetMapEventsQuery(-180, -85, 180, 85, 20, 0))).rejects.toMatchObject({
+      response: { message: 'MAP_VIEWPORT_TOO_LARGE' }
+    });
+    expect(cacheGetMany).not.toHaveBeenCalled();
   });
 });

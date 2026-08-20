@@ -33,7 +33,7 @@ export class RedisRateLimitService implements OnModuleDestroy {
   private readonly redis: Redis;
 
   constructor(config: ConfigService) {
-    this.redis = new Redis(config.get<string>('redis.url', 'redis://:redis_dev@localhost:6379'), {
+    this.redis = new Redis(config.get<string>('redis.rateLimitUrl', 'redis://:redis_dev@localhost:6379'), {
       lazyConnect: true,
       enableOfflineQueue: false,
       maxRetriesPerRequest: 1,

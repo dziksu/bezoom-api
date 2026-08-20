@@ -13,7 +13,7 @@ export class RedisCacheService implements OnModuleDestroy {
     config: ConfigService,
     private readonly metrics: MetricsService
   ) {
-    this.redis = new Redis(config.get<string>('redis.url', 'redis://:redis_dev@localhost:6379'), {
+    this.redis = new Redis(config.get<string>('redis.cacheUrl', 'redis://:redis_dev@localhost:6379'), {
       lazyConnect: true,
       enableOfflineQueue: false,
       maxRetriesPerRequest: 1,

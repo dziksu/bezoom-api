@@ -1,7 +1,9 @@
 import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { sql } from 'drizzle-orm';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
+import { backgroundWorkersEnabled, type RuntimeConfig } from '@api/shared/infrastructure/config/runtime.config';
 
 /**
  * Durable event_stats projector contract.
@@ -17,13 +19,16 @@ export class EventStatsProjectionService implements OnApplicationBootstrap, OnMo
   private timer?: NodeJS.Timeout;
   private inFlight?: Promise<void>;
   private shuttingDown = false;
+  private nextCleanupAt = 0;
 
   constructor(
     private readonly writeService: DrizzleWriteService,
-    private readonly cache: RedisCacheService
+    private readonly cache: RedisCacheService,
+    private readonly config: ConfigService
   ) {}
 
   onApplicationBootstrap(): void {
+    if (!backgroundWorkersEnabled(this.config.get<RuntimeConfig>('runtime'))) return;
     const configured = Number(process.env.EVENT_STATS_PROJECTION_INTERVAL_MS ?? 250);
     const intervalMs = Number.isFinite(configured) ? Math.max(50, configured) : 250;
 
@@ -53,6 +58,7 @@ export class EventStatsProjectionService implements OnApplicationBootstrap, OnMo
       do {
         projected = await this.projectNextBatch();
       } while (projected === 100);
+      await this.cleanupProcessedOutboxIfDue();
     } catch (error) {
       this.logger.error('EVENT_STATS_PROJECTION_FAILED', error instanceof Error ? error.stack : undefined);
     }
@@ -60,24 +66,39 @@ export class EventStatsProjectionService implements OnApplicationBootstrap, OnMo
 
   async projectNextBatch(limit = 100): Promise<number> {
     const safeLimit = Math.max(1, Math.min(limit, 1000));
+    const candidateLimit = Math.min(safeLimit * 4, 4_000);
 
-    const aggregateIds = await this.writeService.db.transaction(async (tx) => {
+    const projection = await this.writeService.db.transaction(async (tx) => {
       const result: unknown = await tx.execute(sql`
-        WITH claimed AS (
-          SELECT id, aggregate_id, payload
+        WITH candidates AS MATERIALIZED (
+          SELECT id, aggregate_id, payload, occurred_at
           FROM event_outbox
           WHERE processed_at IS NULL
             AND event_type = 'event.stats.changed'
-            AND NOT EXISTS (
-              SELECT 1
-              FROM event_outbox earlier
-              WHERE earlier.processed_at IS NULL
-                AND earlier.event_type = 'event.stats.changed'
-                AND earlier.aggregate_id = event_outbox.aggregate_id
-                AND (earlier.occurred_at, earlier.id) < (event_outbox.occurred_at, event_outbox.id)
-            )
           ORDER BY occurred_at, id
           FOR UPDATE SKIP LOCKED
+          LIMIT ${candidateLimit}
+        ), candidate_aggregates AS MATERIALIZED (
+          SELECT DISTINCT ON (aggregate_id) aggregate_id, occurred_at, id
+          FROM candidates
+          ORDER BY aggregate_id, occurred_at, id
+        ), locked_aggregates AS MATERIALIZED (
+          SELECT candidate.aggregate_id
+          FROM candidate_aggregates candidate
+          WHERE NOT EXISTS (
+            SELECT 1
+            FROM event_outbox earlier
+            WHERE earlier.processed_at IS NULL
+              AND earlier.event_type = 'event.stats.changed'
+              AND earlier.aggregate_id = candidate.aggregate_id
+              AND (earlier.occurred_at, earlier.id) < (candidate.occurred_at, candidate.id)
+          )
+            AND pg_try_advisory_xact_lock(hashtextextended(candidate.aggregate_id::text, 0))
+        ), claimed AS MATERIALIZED (
+          SELECT candidate.id, candidate.aggregate_id, candidate.payload, candidate.occurred_at
+          FROM candidates candidate
+          JOIN locked_aggregates locked USING (aggregate_id)
+          ORDER BY candidate.occurred_at, candidate.id
           LIMIT ${safeLimit}
         ), aggregated AS (
           SELECT
@@ -106,9 +127,43 @@ export class EventStatsProjectionService implements OnApplicationBootstrap, OnMo
         RETURNING outbox.aggregate_id
       `);
 
-      return (result as { rows: Array<{ aggregate_id: string }> }).rows.map((row) => row.aggregate_id);
+      const rows = (result as { rows: Array<{ aggregate_id: string }> }).rows;
+      return {
+        eventIds: [...new Set(rows.map((row) => row.aggregate_id))],
+        processedCount: rows.length
+      };
     });
-    await Promise.all(aggregateIds.map((eventId) => this.cache.delete('event_detail', eventId)));
-    return aggregateIds.length;
+    await Promise.all(projection.eventIds.map((eventId) => this.cache.delete('event_detail', eventId)));
+    return projection.processedCount;
+  }
+
+  async cleanupProcessedOutbox(limit = 5_000): Promise<number> {
+    const safeLimit = Math.max(1, Math.min(limit, 10_000));
+    const retentionDays = this.config.get<RuntimeConfig>('runtime')?.outboxRetentionDays ?? 7;
+    const result: unknown = await this.writeService.db.execute(sql`
+      WITH expired AS (
+        SELECT id
+        FROM event_outbox
+        WHERE processed_at < now() - (${retentionDays} * interval '1 day')
+        ORDER BY processed_at, id
+        FOR UPDATE SKIP LOCKED
+        LIMIT ${safeLimit}
+      )
+      DELETE FROM event_outbox outbox
+      USING expired
+      WHERE outbox.id = expired.id
+      RETURNING outbox.id
+    `);
+    return (result as { rows: Array<{ id: string }> }).rows.length;
+  }
+
+  private async cleanupProcessedOutboxIfDue(): Promise<void> {
+    const now = Date.now();
+    if (now < this.nextCleanupAt) return;
+    this.nextCleanupAt = now + 60 * 60 * 1_000;
+    let removed: number;
+    do {
+      removed = await this.cleanupProcessedOutbox();
+    } while (removed === 5_000);
   }
 }

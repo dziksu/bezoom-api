@@ -23,7 +23,7 @@ export class HealthService implements OnModuleDestroy {
     private readonly objectStorage: ObjectStorageService
   ) {
     this.timeoutMs = configService.get<number>('HEALTH_CHECK_TIMEOUT_MS', 2_000);
-    this.redis = new Redis(configService.get<string>('redis.url', 'redis://:redis_dev@localhost:6379'), {
+    this.redis = new Redis(configService.get<string>('redis.cacheUrl', 'redis://:redis_dev@localhost:6379'), {
       lazyConnect: true,
       enableOfflineQueue: false,
       maxRetriesPerRequest: 0,

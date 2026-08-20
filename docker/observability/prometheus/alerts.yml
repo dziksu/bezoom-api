@@ -26,7 +26,7 @@ groups:
         expr: |
           histogram_quantile(
             0.95,
-            sum by (le) (rate(bezoom_http_request_duration_seconds_bucket[5m]))
+            sum by (le) (rate(bezoom_http_request_duration_seconds_bucket{route!~"/api/health.*"}[5m]))
           ) > 0.5
         for: 10m
         labels:
@@ -43,3 +43,21 @@ groups:
         annotations:
           summary: BeZoom API event loop is blocked
           description: Node.js p99 event-loop lag has exceeded 250 ms for five minutes.
+
+      - alert: BezoomApiDatabasePoolWaiting
+        expr: max(bezoom_database_pool_connections{state="waiting"}) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BeZoom API is waiting for PostgreSQL pool connections
+          description: At least one API database pool has queued requests for five minutes.
+
+      - alert: BezoomApiOutboxBacklog
+        expr: bezoom_event_outbox_oldest_pending_age_seconds > 30
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: BeZoom event outbox is delayed
+          description: The oldest unprocessed outbox item has been pending for more than 30 seconds.

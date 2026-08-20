@@ -6,6 +6,7 @@ import { DomainValidationError } from '../../../domain/events.errors';
 import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
 import type { EventLifecycleResponseDto } from '../../dto/event-response.dto';
+import { isEventMapVisible } from '../../cache/event-cache-visibility';
 import { UpdateEventCommand } from './update-event.command';
 
 const MAX_PHOTO_SIZE_BYTES = 5 * 1024 * 1024;
@@ -27,6 +28,7 @@ export class UpdateEventHandler implements ICommandHandler<UpdateEventCommand, E
     if (!event || event.archivedAt || event.organizerKeycloakSub !== command.organizerKeycloakSub) {
       throw new NotFoundException('EVENT_NOT_FOUND');
     }
+    const wasMapVisible = isEventMapVisible(event);
 
     const photos = command.changes.photoIds
       ? await this.resolvePhotos(command.changes.photoIds, event.id, command.organizerKeycloakSub)
@@ -87,7 +89,8 @@ export class UpdateEventHandler implements ICommandHandler<UpdateEventCommand, E
     }
 
     await this.repository.update(event, { removedPhotoIds });
-    await Promise.all([this.cache.delete('event_detail', event.id), this.cache.incrementVersion('event_map')]);
+    await this.cache.delete('event_detail', event.id);
+    if (wasMapVisible) await this.cache.incrementVersion('event_map');
     return this.lifecycle(event);
   }
 

@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import { CommandHandler, type ICommandHandler } from '@nestjs/cqrs';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
 import { EventRepository } from '../../../domain/event.repository';
+import { isEventMapVisible } from '../../cache/event-cache-visibility';
 import { ArchiveEventCommand } from './archive-event.command';
 
 @CommandHandler(ArchiveEventCommand)
@@ -16,8 +17,10 @@ export class ArchiveEventHandler implements ICommandHandler<ArchiveEventCommand,
     if (!event || event.archivedAt || event.organizerKeycloakSub !== command.organizerKeycloakSub) {
       throw new NotFoundException('EVENT_NOT_FOUND');
     }
+    const wasMapVisible = isEventMapVisible(event);
     event.archive();
     await this.repository.update(event);
-    await Promise.all([this.cache.delete('event_detail', event.id), this.cache.incrementVersion('event_map')]);
+    await this.cache.delete('event_detail', event.id);
+    if (wasMapVisible) await this.cache.incrementVersion('event_map');
   }
 }

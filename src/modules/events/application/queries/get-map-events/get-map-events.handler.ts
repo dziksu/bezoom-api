@@ -1,15 +1,15 @@
 import { BadRequestException } from '@nestjs/common';
 import { IQueryHandler, QueryHandler } from '@nestjs/cqrs';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { DrizzleReadService } from '@api/shared/infrastructure/drizzle-read.service';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
-import { eventPhotos } from '@api/shared/infrastructure/database/schema';
-import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
+import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import type { MapEventPinDto, MapEventsResponseDto } from '../../dto/event-response.dto';
 import { GetMapEventsQuery } from './get-map-events.query';
 import {
   boundsCoveringSectors,
+  countSectorsForBounds,
   sectorCacheKey,
   sectorForPoint,
   sectorsForBounds,
@@ -22,36 +22,24 @@ type VisibilityLevel = MapEventPinDto['visibilityLevel'];
 type SectorScope = 'CITY_PLUS' | 'ALL';
 
 const MAP_SECTOR_CACHE_TTL_SECONDS = 15 * 60;
+const MAP_COUNT_CACHE_TTL_SECONDS = 60;
+export const MAX_MAP_VIEWPORT_SECTORS = 64;
+export const MAX_MAP_COUNT_SECTORS = 256;
 
 interface MapPinRow {
   id: string;
   title: string;
-  description: string;
   category: string;
   start_date: Date | string;
   end_date: Date | string | null;
   organizer_id: string | null;
-  submitted_by_is_organizer: boolean;
-  price_type: string | null;
-  price_min: string | null;
-  price_max: string | null;
-  currency: string | null;
-  ticket_url: string | null;
-  price_notes: string | null;
-  amenities: string[] | null;
-  status: string;
-  verification_status: string;
-  created_at: Date | string;
   latitude: string | number;
   longitude: string | number;
   address: string | null;
   city: string | null;
   country: string | null;
   radius_km: number;
-}
-
-interface MapAggregateRow {
-  events: MapPinRow[] | null;
+  cover_media_key: string;
 }
 
 interface MapCountRow {
@@ -68,15 +56,15 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
   ) {}
 
   async execute(query: GetMapEventsQuery): Promise<MapEventsResponseDto> {
-    if (query.west >= query.east || query.south >= query.north) {
-      throw new BadRequestException('MAP_BOUNDS_INVALID');
-    }
+    const viewport = this.viewportBounds(query);
     const countBounds = this.countBounds(query);
+    const sectorZoom = sectorZoomForMapZoom(query.zoom);
+    this.assertSectorBudget(viewport, sectorZoom, MAX_MAP_VIEWPORT_SECTORS, 'MAP_VIEWPORT_TOO_LARGE');
+    this.assertSectorBudget(countBounds, sectorZoom, MAX_MAP_COUNT_SECTORS, 'MAP_COUNT_BOUNDS_TOO_LARGE');
 
     const individualReachKm = this.individualReachForZoom(query.zoom);
     const scope: SectorScope = individualReachKm >= 25 ? 'CITY_PLUS' : 'ALL';
-    const sectorZoom = sectorZoomForMapZoom(query.zoom);
-    const sectors = sectorsForBounds(query, sectorZoom);
+    const sectors = sectorsForBounds(viewport, sectorZoom);
     const version = await this.cache.getVersion('event_map');
     const keyedSectors = sectors.map((sector) => ({
       sector,
@@ -87,7 +75,7 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
       keyedSectors.map(({ key }) => key)
     );
     const missing = keyedSectors.filter(({ key }) => !cached.has(key));
-    const loaded: Map<string, MapEventPinDto[]> =
+    const loaded =
       missing.length > 0
         ? await this.loadMissingSectors(query, missing, individualReachKm)
         : new Map<string, MapEventPinDto[]>();
@@ -104,31 +92,37 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
     const blockedOrganizerIds = query.viewerKeycloakSub
       ? await this.blockedOrganizerIds(query.viewerKeycloakSub)
       : new Set<string>();
-    let events = [...uniqueEvents.values()].filter((event) => new Date(event.startDate).getTime() > Date.now());
-    if (blockedOrganizerIds.size > 0) {
-      events = events.filter((event) => !event.organizerId || !blockedOrganizerIds.has(event.organizerId));
-    }
-
     const centerLatitude = (query.south + query.north) / 2;
     const centerLongitude = (query.west + query.east) / 2;
-    events = events
+    const eligibleEvents = [...uniqueEvents.values()]
+      .filter((event) => this.isInside(event, viewport))
+      .filter((event) => new Date(event.startDate).getTime() > Date.now())
+      .filter((event) => !event.organizerId || !blockedOrganizerIds.has(event.organizerId))
       .map((event) => ({
         ...event,
         distanceKm: this.distanceKm(centerLatitude, centerLongitude, event.latitude, event.longitude)
       }))
       .sort((left, right) => right.reachKm - left.reachKm || +new Date(left.startDate) - +new Date(right.startDate));
 
-    const totalCount = await this.loadTotalCount(countBounds, query.week, blockedOrganizerIds);
-
+    const countCanBeDerived = individualReachKm === 0 && this.sameBounds(viewport, countBounds);
+    const totalCount = countCanBeDerived
+      ? eligibleEvents.length
+      : await this.loadTotalCount(countBounds, query.week, blockedOrganizerIds, version);
     return {
-      events,
+      events: eligibleEvents,
       clusters: [],
       totalCount,
-      returnedCount: events.length,
-      representedCount: totalCount,
+      returnedCount: eligibleEvents.length,
+      representedCount: eligibleEvents.length,
       individualReachKm,
       zoom: query.zoom
     };
+  }
+
+  private viewportBounds(query: GetMapEventsQuery): MapSectorBounds {
+    const bounds = { west: query.west, south: query.south, east: query.east, north: query.north };
+    this.assertBounds(bounds, 'MAP_BOUNDS_INVALID');
+    return bounds;
   }
 
   private countBounds(query: GetMapEventsQuery): MapSectorBounds {
@@ -137,23 +131,44 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
     if (suppliedCount !== 0 && suppliedCount !== supplied.length) {
       throw new BadRequestException('MAP_COUNT_BOUNDS_INCOMPLETE');
     }
-
     const bounds =
       suppliedCount === supplied.length
-        ? {
-            west: query.countWest!,
-            south: query.countSouth!,
-            east: query.countEast!,
-            north: query.countNorth!
-          }
-        : { west: query.west, south: query.south, east: query.east, north: query.north };
-    if (bounds.west >= bounds.east || bounds.south >= bounds.north) {
-      throw new BadRequestException('MAP_COUNT_BOUNDS_INVALID');
-    }
+        ? { west: query.countWest!, south: query.countSouth!, east: query.countEast!, north: query.countNorth! }
+        : this.viewportBounds(query);
+    this.assertBounds(bounds, 'MAP_COUNT_BOUNDS_INVALID');
     return bounds;
   }
 
+  private assertBounds(bounds: MapSectorBounds, code: string): void {
+    if (bounds.west >= bounds.east || bounds.south >= bounds.north) throw new BadRequestException(code);
+  }
+
+  private assertSectorBudget(bounds: MapSectorBounds, zoom: number, maximum: number, code: string): void {
+    if (countSectorsForBounds(bounds, zoom) > maximum) throw new BadRequestException(code);
+  }
+
   private async loadTotalCount(
+    bounds: MapSectorBounds,
+    week: number | undefined,
+    blockedOrganizerIds: Set<string>,
+    version: number
+  ): Promise<number> {
+    if (blockedOrganizerIds.size > 0) return this.loadTotalCountFromDatabase(bounds, week, blockedOrganizerIds);
+
+    const key = [
+      `v${version}`,
+      this.weekCacheKey(week) ?? 'all',
+      bounds.west.toFixed(5),
+      bounds.south.toFixed(5),
+      bounds.east.toFixed(5),
+      bounds.north.toFixed(5)
+    ].join(':');
+    return this.cache.getOrSet('event_map_count', key, MAP_COUNT_CACHE_TTL_SECONDS, () =>
+      this.loadTotalCountFromDatabase(bounds, week, blockedOrganizerIds)
+    );
+  }
+
+  private async loadTotalCountFromDatabase(
     bounds: MapSectorBounds,
     week: number | undefined,
     blockedOrganizerIds: Set<string>
@@ -175,9 +190,7 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
       )
       SELECT count(*)::int AS count
       FROM params p
-      JOIN locations l
-        ON l.geog && p.envelope::geography
-       AND ST_Intersects(l.geog, p.envelope::geography)
+      JOIN locations l ON ST_Intersects(l.geom, p.envelope)
       JOIN events e ON e.id = l.event_id
       JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
       WHERE e.status = 'PUBLISHED'
@@ -205,8 +218,7 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
   ): Promise<Map<string, MapEventPinDto[]>> {
     const loadBounds = boundsCoveringSectors(missing.map(({ sector }) => sector));
     const pinRows = await this.loadRows(loadBounds, query.week, individualReachKm);
-    const coverPhotos = await this.fetchCoverPhotos(pinRows.map((event) => event.id));
-    const events = pinRows.map((event) => this.mapPin(event, coverPhotos));
+    const events = pinRows.map((event) => this.mapPin(event));
     const byCoordinates = new Map(
       missing.map(({ sector, key }) => [`${sector.x}:${sector.y}`, { key, events: [] as MapEventPinDto[] }])
     );
@@ -231,42 +243,43 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
         SELECT
           ST_MakeEnvelope(${bounds.west}, ${bounds.south}, ${bounds.east}, ${bounds.north}, 4326) AS envelope,
           (date_trunc('week', (now() AT TIME ZONE 'Europe/Warsaw')) + (${weekOffset} * interval '7 days')) AS week_start
-      ),
-      candidates AS MATERIALIZED (
-        SELECT
-          e.id, e.title, e.description, e.category, e.start_date, e.end_date,
-          organizer.id AS organizer_id, e.submitted_by_is_organizer, e.price_type, e.price_min, e.price_max, e.currency,
-          e.ticket_url, e.price_notes, e.amenities, e.status, e.verification_status,
-          e.created_at, e.radius_km,
-          l.latitude, l.longitude, l.address, l.city, l.country
-        FROM params p
-        JOIN locations l
-          ON l.geog && p.envelope::geography
-         AND ST_Intersects(l.geog, p.envelope::geography)
-        JOIN events e ON e.id = l.event_id
-        JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
-        WHERE e.status = 'PUBLISHED'
-          AND e.verification_status = 'VERIFIED'
-          AND e.visibility = 'PUBLIC'
-          AND e.media_pipeline_status = 'READY'
-          AND e.archived_at IS NULL
-          AND e.start_date > now()
-          AND e.radius_km >= ${individualReachKm}
-          AND organizer.account_status = 'ACTIVE'
-          AND (
-            ${weekIsNull} OR (
-              (e.start_date AT TIME ZONE 'Europe/Warsaw') >= p.week_start
-              AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < p.week_start + interval '7 days'
-            )
-          )
       )
-      SELECT COALESCE((
-        SELECT jsonb_agg(to_jsonb(candidate) ORDER BY candidate.radius_km DESC, candidate.start_date ASC, candidate.id ASC)
-        FROM candidates candidate
-      ), '[]'::jsonb) AS events
+      SELECT
+        e.id, e.title, e.category, e.start_date, e.end_date,
+        organizer.id AS organizer_id, e.radius_km,
+        l.latitude, l.longitude, l.address, l.city, l.country,
+        cover.media_key AS cover_media_key
+      FROM params p
+      JOIN locations l ON ST_Intersects(l.geom, p.envelope)
+      JOIN events e ON e.id = l.event_id
+      JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
+      JOIN LATERAL (
+        SELECT photo.media_key
+        FROM event_photos photo
+        WHERE photo.event_id = e.id
+          AND photo.status = 'READY'
+          AND photo.media_key IS NOT NULL
+        ORDER BY photo.position ASC NULLS LAST, photo.id ASC
+        LIMIT 1
+      ) cover ON true
+      WHERE e.status = 'PUBLISHED'
+        AND e.verification_status = 'VERIFIED'
+        AND e.visibility = 'PUBLIC'
+        AND e.media_pipeline_status = 'READY'
+        AND e.archived_at IS NULL
+        AND e.start_date > now()
+        AND e.radius_km >= ${individualReachKm}
+        AND organizer.account_status = 'ACTIVE'
+        AND (
+          ${weekIsNull} OR (
+            (e.start_date AT TIME ZONE 'Europe/Warsaw') >= p.week_start
+            AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < p.week_start + interval '7 days'
+          )
+        )
+      ORDER BY e.radius_km DESC, e.start_date ASC, e.id ASC
     `);
 
-    return (raw as { rows: MapAggregateRow[] }).rows[0]?.events ?? [];
+    return (raw as { rows: MapPinRow[] }).rows;
   }
 
   private async blockedOrganizerIds(viewerKeycloakSub: string): Promise<Set<string>> {
@@ -284,37 +297,22 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
     return new Set((raw as { rows: Array<{ id: string }> }).rows.map(({ id }) => id));
   }
 
-  private mapPin(row: MapPinRow, coverPhotos: Map<string, string>): MapEventPinDto {
+  private mapPin(row: MapPinRow): MapEventPinDto {
     return {
       id: row.id,
       title: row.title,
-      description: row.description,
+      coverPhotoUrl: this.objectStorage.getPublicUrl(this.objectStorage.mediaBucket, row.cover_media_key),
       category: row.category,
       startDate: this.databaseDate(row.start_date),
       endDate: row.end_date ? this.databaseDate(row.end_date) : undefined,
       organizerId: row.organizer_id ?? undefined,
       creatorId: row.organizer_id ?? undefined,
-      submittedByIsOrganizer: row.submitted_by_is_organizer,
       latitude: Number(row.latitude),
       longitude: Number(row.longitude),
       address: row.address ?? undefined,
       city: row.city ?? undefined,
       country: row.country ?? 'PL',
-      priceType: row.price_type ?? 'FREE',
-      priceMin: row.price_min ? Number(row.price_min) : undefined,
-      priceMax: row.price_max ? Number(row.price_max) : undefined,
-      currency: row.currency ?? 'PLN',
-      ticketUrl: row.ticket_url ?? undefined,
-      priceNotes: row.price_notes ?? undefined,
-      amenities: row.amenities ?? [],
-      photos: [],
-      status: row.status,
-      verificationStatus: row.verification_status,
-      createdAt: this.databaseDate(row.created_at),
       distanceKm: 0,
-      coverPhotoUrl: coverPhotos.has(row.id)
-        ? this.objectStorage.getPublicUrl(this.objectStorage.mediaBucket, coverPhotos.get(row.id)!)
-        : undefined,
       reachKm: Number(row.radius_km),
       visibilityLevel: this.visibilityLevel(Number(row.radius_km))
     };
@@ -332,15 +330,18 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
     return 'NEARBY';
   }
 
-  private async fetchCoverPhotos(eventIds: string[]): Promise<Map<string, string>> {
-    if (eventIds.length === 0) return new Map();
-    const rows = await this.readService.db
-      .selectDistinctOn([eventPhotos.eventId], { eventId: eventPhotos.eventId, mediaKey: eventPhotos.mediaKey })
-      .from(eventPhotos)
-      .where(and(inArray(eventPhotos.eventId, eventIds), eq(eventPhotos.status, 'READY')))
-      .orderBy(eventPhotos.eventId, eventPhotos.position);
-    return new Map(
-      rows.filter((item) => item.mediaKey).map((item) => [item.eventId as string, item.mediaKey as string])
+  private isInside(event: MapEventPinDto, bounds: MapSectorBounds): boolean {
+    return (
+      event.longitude >= bounds.west &&
+      event.longitude <= bounds.east &&
+      event.latitude >= bounds.south &&
+      event.latitude <= bounds.north
+    );
+  }
+
+  private sameBounds(left: MapSectorBounds, right: MapSectorBounds): boolean {
+    return (
+      left.west === right.west && left.south === right.south && left.east === right.east && left.north === right.north
     );
   }
 

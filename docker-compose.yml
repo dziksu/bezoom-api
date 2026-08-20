@@ -51,6 +51,7 @@ services:
     environment:
       CI: 'true'
       NODE_ENV: development
+      PROCESS_ROLE: all
       API_PORT: 4000
       DATABASE_URL: postgresql://${POSTGRES_USER:-bezoom}:${POSTGRES_PASSWORD:-bezoom_dev}@postgres:5432/bezoom
       DATABASE_READ_URL: postgresql://${POSTGRES_USER:-bezoom}:${POSTGRES_PASSWORD:-bezoom_dev}@postgres:5432/bezoom

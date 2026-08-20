@@ -26,7 +26,7 @@ export class ResubmitEventHandler implements ICommandHandler<ResubmitEventComman
     }
 
     await this.repository.update(event, { enqueueReview: true });
-    await Promise.all([this.cache.delete('event_detail', event.id), this.cache.incrementVersion('event_map')]);
+    await this.cache.delete('event_detail', event.id);
     return {
       id: event.id,
       status: event.status,

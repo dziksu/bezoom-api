@@ -84,33 +84,49 @@ describe('owner event lifecycle handlers', () => {
       amenities: [],
       photos: event.photos
     });
-    const { resubmit, repository } = build(event);
+    const { resubmit, repository, cache } = build(event);
 
     const result = await resubmit.execute(new ResubmitEventCommand(event.id, ownerSub));
 
     expect(result.status).toBe('UPLOADED');
     expect(repository.update).toHaveBeenCalledWith(event, { enqueueReview: true });
+    expect(cache.incrementVersion).not.toHaveBeenCalled();
   });
 
   it('keeps a cancelled event in owner history', async () => {
     const event = Event.create(input(), randomUUID());
-    const { cancel, repository } = build(event);
+    const { cancel, repository, cache } = build(event);
 
     const result = await cancel.execute(new CancelEventCommand(event.id, ownerSub));
 
     expect(result.status).toBe('CANCELLED');
     expect(event.archivedAt).toBeUndefined();
     expect(repository.update).toHaveBeenCalledWith(event);
+    expect(cache.incrementVersion).not.toHaveBeenCalled();
   });
 
   it('soft-archives an owned event', async () => {
     const event = Event.create(input(), randomUUID());
-    const { archive, repository } = build(event);
+    const { archive, repository, cache } = build(event);
 
     await archive.execute(new ArchiveEventCommand(event.id, ownerSub));
 
     expect(event.archivedAt).toBeInstanceOf(Date);
     expect(repository.update).toHaveBeenCalledWith(event);
+    expect(cache.incrementVersion).not.toHaveBeenCalled();
+  });
+
+  it('invalidates the map when a published event is cancelled', async () => {
+    const event = Event.create(input(), randomUUID());
+    event.verify();
+    event.markPhotoReady(event.photos[0].id, `events/${event.id}/photo.jpg`);
+    event.markReady();
+    event.publish();
+    const { cancel, cache } = build(event);
+
+    await cancel.execute(new CancelEventCommand(event.id, ownerSub));
+
+    expect(cache.incrementVersion).toHaveBeenCalledWith('event_map');
   });
 
   it('masks foreign events on every owner mutation', async () => {

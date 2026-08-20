@@ -89,28 +89,36 @@ export class ProfileService {
     identityIssuedAt?: number,
     emailVerified?: boolean
   ): Promise<ProfileRecord> {
-    const [created] = await this.drizzleWrite.db
-      .insert(profiles)
-      .values({
-        keycloakSub,
-        email: emailVerified === true ? email || null : null,
-        firstName: firstName || null,
-        lastName: lastName || null,
-        identitySyncedAt: identityIssuedAt ? new Date(identityIssuedAt * 1_000) : null,
-        accountType: 'personal'
-      })
-      .onConflictDoNothing({ target: profiles.keycloakSub })
-      .returning();
-    if (created) {
-      this.logger.log('PROFILE_CREATED');
-      return created;
-    }
-
-    const [existing] = await this.drizzleWrite.db
+    let [existing] = await this.drizzleWrite.db
       .select()
       .from(profiles)
       .where(eq(profiles.keycloakSub, keycloakSub))
       .limit(1);
+
+    if (!existing) {
+      const [created] = await this.drizzleWrite.db
+        .insert(profiles)
+        .values({
+          keycloakSub,
+          email: emailVerified === true ? email || null : null,
+          firstName: firstName || null,
+          lastName: lastName || null,
+          identitySyncedAt: identityIssuedAt ? new Date(identityIssuedAt * 1_000) : null,
+          accountType: 'personal'
+        })
+        .onConflictDoNothing({ target: profiles.keycloakSub })
+        .returning();
+      if (created) {
+        this.logger.log('PROFILE_CREATED');
+        return created;
+      }
+
+      [existing] = await this.drizzleWrite.db
+        .select()
+        .from(profiles)
+        .where(eq(profiles.keycloakSub, keycloakSub))
+        .limit(1);
+    }
     if (!existing) throw new NotFoundException('PROFILE_NOT_FOUND');
     if (existing.accountStatus !== 'ACTIVE') throw new ConflictException('ACCOUNT_INACTIVE');
 

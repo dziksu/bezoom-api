@@ -32,8 +32,11 @@ describe('ProfileService phone verification', () => {
         };
       }
     }));
+    const select = jest.fn(() => ({
+      from: () => ({ where: () => ({ limit: jest.fn().mockResolvedValue([]) }) })
+    }));
     const service = new ProfileService(
-      { db: { insert } } as never,
+      { db: { insert, select } } as never,
       {} as never,
       {} as never,
       new ConfigService(),

@@ -3,6 +3,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
+import compression from 'compression';
 import { AppModule } from './app.module';
 import { JsonLoggerService } from './shared/infrastructure/observability/json-logger.service';
 import { ApiExceptionFilter, validationExceptionFactory } from './shared/infrastructure/http';
@@ -35,6 +36,7 @@ async function bootstrap() {
       contentSecurityPolicy: false
     })
   );
+  app.use(compression({ threshold: 1_024 }));
 
   // ── CORS ───────────────────────────────────────────────────────────────
   app.enableCors({

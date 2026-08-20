@@ -6,6 +6,7 @@ import { ApiExceptionFilter } from '../src/shared/infrastructure/http';
 import { RedisRateLimitGuard } from '../src/shared/infrastructure/rate-limit/redis-rate-limit.guard';
 import { UserController } from '../src/modules/user/user.controller';
 import { ProfileService } from '../src/modules/user/services/profile.service';
+import { EventReadService } from '../src/modules/events/infrastructure/read/event-read.service';
 
 describe('Avatar upload limit (e2e)', () => {
   let app: INestApplication<App>;
@@ -14,7 +15,10 @@ describe('Avatar upload limit (e2e)', () => {
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
       controllers: [UserController],
-      providers: [{ provide: ProfileService, useValue: { uploadAvatar } }]
+      providers: [
+        { provide: ProfileService, useValue: { uploadAvatar } },
+        { provide: EventReadService, useValue: {} }
+      ]
     })
       .overrideGuard(RedisRateLimitGuard)
       .useValue({ canActivate: () => true })
@@ -39,5 +43,5 @@ describe('Avatar upload limit (e2e)', () => {
     expect(uploadAvatar).not.toHaveBeenCalled();
   });
 
-  afterAll(async () => app.close());
+  afterAll(async () => app?.close());
 });

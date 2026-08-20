@@ -105,3 +105,39 @@ pnpm db:check
 ```
 
 Rezultat: 37 zestawów i 149 testów zaliczonych, poprawny build, formatowanie oraz spójność migracji Drizzle. Migracja `0011_geo_search_active_organizers.sql` została także zastosowana do lokalnej bazy z pełnym seedem `performance`.
+
+## Etap skalowania API — 20 sierpnia 2026
+
+Kolejny przegląd objął mapę, geo-search, pule połączeń, Redis, workery, outbox i obserwowalność. Pomiary wykonano na tym samym lokalnym seedzie `performance`; wyniki są testem regresyjnym jednej instancji, a nie deklaracją produkcyjnej pojemności.
+
+Najważniejsze zmiany:
+
+- mapa zwraca kompaktowy DTO zamiast pełnego eventu, maksymalnie 500 pinezek, a nadmiar reprezentuje przez klastry;
+- koszt viewportu jest ograniczony budżetem sektorów przed alokacją pamięci, a zapytania prostokątne używają osobnej kolumny `geometry(Point, 4326)` i indeksu GiST;
+- typowy total mapy jest wyprowadzany z już pobranych sektorów; osobne count bounds mają krótki cache;
+- geo-search dzieli kandydatów na zasięg lokalny, wybierany indeksem PostGIS, oraz większe zasięgi wybierane indeksem `(radius_km, start_date, id)`, dzięki czemu nie skanuje całej Polski promieniem 1000 km;
+- projektor statystyk agreguje cały batch outboxa, używa `SKIP LOCKED`, opróżnia kolejne pełne batche i usuwa przetworzone rekordy po retencji;
+- repliki HTTP mogą działać z `PROCESS_ROLE=api`, a osobne repliki workerów z `PROCESS_ROLE=worker`;
+- cache, rate limiting i BullMQ obsługują osobne adresy Redis; read/write PostgreSQL mają niezależne pule i timeouty;
+- Prometheus mierzy rozmiar odpowiedzi, stan pul DB oraz backlog i wiek outboxa; alerty obejmują oczekiwanie na połączenia oraz opóźniony outbox;
+- publiczne discovery ma kompresję, krótki cache HTTP i distributed rate limiting, a udane access logi są próbkowane produkcyjnie.
+
+Pomiary punktowe:
+
+| Scenariusz | Zimny odczyt | Ciepły odczyt | Payload JSON |
+| --- | ---: | ---: | ---: |
+| Mapa Warszawy, typowy viewport | 257 ms | 13 ms | 27,1 KB |
+| Mapa, dawny szeroki viewport | 349 ms | cache sektorowy | 48,9 KB |
+| Geo-search Warszawa, 20 wyników | 710 ms | 9 ms | 25,1 KB |
+
+Dawny szeroki request mapy zwracał około 6,9 MB i trwał 4,83 s na zimno. Po zmianie ten sam request zwrócił 100 priorytetowych pinezek i 11 klastrów reprezentujących łącznie 269 eventów. Dodatkowo naprawiono wcześniejsze przeciekanie rekordów spoza dokładnego viewportu, wynikające z granic kafli cache.
+
+Kontrolowany test `pnpm test:load`, z podniesionym limitem tylko w lokalnej instancji benchmarkowej, uzyskał:
+
+- 25 równoległych klientów przez 20 sekund;
+- 23 129 żądań, czyli 1 156 RPS;
+- 0% błędów;
+- p50 20,8 ms, p95 37,0 ms, p99 59,1 ms;
+- p95 mapy 41,0 ms i p95 geo-search 33,3 ms.
+
+Test korzystał głównie z ciepłego cache i jednej instancji. Przed produkcją należy powtórzyć go na stagingu dla wielu replik, z realistycznym rozkładem viewportów, wymuszonym udziałem cache missów, osobnymi Redisami, PgBouncerem oraz monitoringiem CPU, pamięci, liczby połączeń i opóźnienia outboxa.

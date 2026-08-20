@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import { inArray, sql } from 'drizzle-orm';
 import type { EventPipelineConfig } from '@api/shared/infrastructure/config/event-pipeline.config';
+import { backgroundWorkersEnabled, type RuntimeConfig } from '@api/shared/infrastructure/config/runtime.config';
 import { DrizzleWriteService } from '@api/shared/infrastructure/drizzle-write.service';
 import { eventOutbox } from '@api/shared/infrastructure/database/schema';
 import { QueueName } from '@api/shared/infrastructure/queue/queue-names';
@@ -29,6 +30,7 @@ export class EventPipelineOutboxDispatcher implements OnApplicationBootstrap, On
   ) {}
 
   onApplicationBootstrap(): void {
+    if (!backgroundWorkersEnabled(this.config.get<RuntimeConfig>('runtime'))) return;
     const pipeline = this.config.get<EventPipelineConfig>('eventPipeline');
     if (pipeline?.mode !== 'development_passthrough') return;
     const intervalMs = pipeline?.dispatchIntervalMs ?? 500;

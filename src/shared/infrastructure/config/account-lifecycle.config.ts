@@ -10,6 +10,7 @@ export interface AccountLifecycleConfig {
   accountReturnUrl: string;
   deletionGraceDays: number;
   workerIntervalMs: number;
+  workerStatementTimeoutMs: number;
 }
 
 export default registerAs('accountLifecycle', (): AccountLifecycleConfig => ({
@@ -21,5 +22,6 @@ export default registerAs('accountLifecycle', (): AccountLifecycleConfig => ({
   accountConsoleClientId: process.env.KEYCLOAK_ACCOUNT_CONSOLE_CLIENT_ID || 'bezoom-web',
   accountReturnUrl: process.env.KEYCLOAK_ACCOUNT_RETURN_URL || 'http://localhost:3000/account',
   deletionGraceDays: Math.max(1, Number(process.env.ACCOUNT_DELETION_GRACE_DAYS || 30)),
-  workerIntervalMs: Math.max(1_000, Number(process.env.ACCOUNT_DELETION_WORKER_INTERVAL_MS || 30_000))
+  workerIntervalMs: Math.max(1_000, Number(process.env.ACCOUNT_DELETION_WORKER_INTERVAL_MS || 30_000)),
+  workerStatementTimeoutMs: Math.max(5_000, Number(process.env.ACCOUNT_DELETION_STATEMENT_TIMEOUT_MS || 30_000))
 }));
