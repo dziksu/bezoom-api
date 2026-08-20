@@ -16,7 +16,6 @@ export function TwoColumnLayout(props: { content: ReactNode; logoUrl: string }) 
 
     const { kcContext } = useKcContext();
     const homeUrl = kcContext.client?.baseUrl ?? redirectUrlOrigin;
-    const isLoginPage = kcContext.pageId === "login.ftl";
 
     return (
         <div className="bezoom-auth-shell grid min-h-svh lg:grid-cols-[1.1fr_0.9fr]">
@@ -74,26 +73,6 @@ export function TwoColumnLayout(props: { content: ReactNode; logoUrl: string }) 
 
             <section className="bezoom-auth-form-panel relative flex min-h-svh flex-col overflow-hidden px-4 py-5 sm:px-8 lg:items-center lg:justify-center lg:py-24">
                 <TemplateTopBar />
-
-                {isLoginPage && (
-                    <div className="bezoom-mobile-pitch relative z-10 mx-auto my-10 w-full max-w-md text-white sm:my-14 lg:hidden">
-                        <span className="bezoom-kicker inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[9px] font-bold tracking-[0.08em] uppercase">
-                            <Sparkles className="size-3.5" />
-                            Dzieje się bliżej, niż myślisz
-                        </span>
-                        <h1 className="mt-5 text-[clamp(3.25rem,15vw,5rem)] leading-[0.86] font-black tracking-[-0.075em]">
-                            Wyjdź.
-                            <br />
-                            Zobacz.
-                            <br />
-                            <span className="bezoom-lime">Bądź tam.</span>
-                        </h1>
-                        <p className="mt-5 max-w-sm text-sm leading-6 text-white/65">
-                            Wydarzenia, ludzie i wspomnienia z Twojego miasta — na
-                            jednej żywej mapie.
-                        </p>
-                    </div>
-                )}
 
                 <main className="relative z-10 mx-auto flex w-full max-w-md flex-1 flex-col justify-center lg:flex-none">
                     {content}

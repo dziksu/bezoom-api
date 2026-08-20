@@ -16,8 +16,8 @@
 #
 # QUICK START
 #   cp .env.example .env.local
-#   docker compose up -d                      # start all services
-#   docker compose --profile observability up -d --build
+#   docker compose --env-file .env.local up -d # start all services
+#   docker compose --env-file .env.local --profile observability up -d --build
 #
 # PORTS OVERVIEW
 #   4000  – BeZoom API    → http://localhost:4000/api
@@ -283,8 +283,11 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-changeme}
       KEYCLOAK_ACCOUNT_MANAGEMENT_CLIENT_SECRET: ${KEYCLOAK_ACCOUNT_MANAGEMENT_CLIENT_SECRET:-dev-bezoom-account-lifecycle-secret}
+      KEYCLOAK_GOOGLE_CLIENT_ID: ${KEYCLOAK_GOOGLE_CLIENT_ID:-}
+      KEYCLOAK_GOOGLE_CLIENT_SECRET: ${KEYCLOAK_GOOGLE_CLIENT_SECRET:-}
     volumes:
       - ./scripts/keycloak/configure-dev.sh:/opt/bezoom/configure-dev.sh:ro
+      - ./keycloak-user-profile.json:/opt/bezoom/user-profile.json:ro
     entrypoint: ['/bin/bash', '/opt/bezoom/configure-dev.sh']
 
   # ───────────────────────────────────────────────────────────────────────────
