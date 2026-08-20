@@ -1,0 +1,23 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bezoom-bg" x1="16" y1="9" x2="118" y2="122" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6937F2"/>
+      <stop offset="0.38" stop-color="#9346F6"/>
+      <stop offset="0.7" stop-color="#E252A4"/>
+      <stop offset="1" stop-color="#FF7058"/>
+    </linearGradient>
+    <radialGradient id="bezoom-light" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 18) rotate(48) scale(88)">
+      <stop stop-color="white" stop-opacity="0.24"/>
+      <stop offset="0.65" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="bezoom-shadow" x="-12" y="-8" width="152" height="156" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#3A176D" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <g filter="url(#bezoom-shadow)">
+    <rect x="6" y="4" width="116" height="116" rx="31" fill="url(#bezoom-bg)"/>
+    <rect x="6.75" y="4.75" width="114.5" height="114.5" rx="30.25" fill="url(#bezoom-light)"/>
+    <rect x="6.75" y="4.75" width="114.5" height="114.5" rx="30.25" stroke="white" stroke-opacity="0.2" stroke-width="1.5"/>
+  </g>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M36 24H56V53.5C61.5 48.7 68.4 46.2 76.5 46.2C94.9 46.2 107 59.2 107 77.7C107 96.6 93.8 108 74.8 108C50.6 108 36 94.3 36 73.7V24ZM56.4 77.8C56.4 88.2 63.4 95.2 73.8 95.2C84.3 95.2 91.2 88.1 91.2 77.8C91.2 67.6 84.3 60.7 73.8 60.7C63.4 60.7 56.4 67.6 56.4 77.8Z" fill="white"/>
+</svg>

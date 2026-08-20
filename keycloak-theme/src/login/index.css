@@ -1,0 +1,447 @@
+/**
+ * This file has been claimed for ownership from @oussemasahbeni/keycloakify-login-shadcn version 250004.0.24.
+ * To relinquish ownership and restore this file to its original content, run the following command:
+ *
+ * $ npx keycloakify own --path "login/index.css" --revert
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/manrope";
+@import "@fontsource-variable/figtree";
+@import "@fontsource-variable/source-sans-3";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource-variable/lora";
+@import "@fontsource-variable/playfair-display";
+@import "@fontsource-variable/jetbrains-mono";
+
+@source "../**/*.{ts,tsx}";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+    --font-inter: "Inter Variable", sans-serif;
+    --font-geist: "Geist Variable", sans-serif;
+    --font-manrope: "Manrope Variable", sans-serif;
+    --font-figtree: "Figtree Variable", sans-serif;
+    --font-source-sans-3: "Source Sans 3 Variable", sans-serif;
+    --font-ibm-plex-sans: "IBM Plex Sans Variable", sans-serif;
+    --font-lora: "Lora Variable", serif;
+    --font-playfair-display: "Playfair Display Variable", serif;
+    --font-jetbrains-mono: "JetBrains Mono Variable", monospace;
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+    *,
+    ::after,
+    ::before,
+    ::backdrop,
+    ::file-selector-button {
+        border-color: var(--color-gray-200, currentcolor);
+    }
+}
+
+@layer utilities {
+    .required {
+        @apply text-red-600;
+    }
+}
+
+:root {
+    color-scheme: light;
+    --theme-font: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    --radius: 1rem;
+    --background: hsl(48 33% 97%);
+    --foreground: hsl(257 21% 9%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(257 21% 9%);
+    --popover: hsl(0 0% 100%);
+    --popover-foreground: hsl(257 21% 9%);
+    --primary: #6c4dff;
+    --primary-foreground: #ffffff;
+    --secondary: hsl(252 18% 94%);
+    --secondary-foreground: hsl(257 21% 14%);
+    --muted: hsl(252 14% 93%);
+    --muted-foreground: hsl(252 8% 42%);
+    --accent: #ff7043;
+    --accent-foreground: #ffffff;
+    --destructive: hsl(0 78% 54%);
+    --border: hsl(255 15% 87%);
+    --input: hsl(255 15% 84%);
+    --ring: #6c4dff;
+}
+
+.dark {
+    color-scheme: dark;
+    --background: hsl(258 22% 7%);
+    --foreground: hsl(48 33% 97%);
+    --card: hsl(257 18% 11%);
+    --card-foreground: hsl(48 33% 97%);
+    --popover: hsl(257 18% 11%);
+    --popover-foreground: hsl(48 33% 97%);
+    --primary: #7c65ff;
+    --primary-foreground: #ffffff;
+    --secondary: hsl(256 16% 16%);
+    --secondary-foreground: hsl(48 33% 97%);
+    --muted: hsl(256 15% 16%);
+    --muted-foreground: hsl(253 9% 67%);
+    --accent: #ff7650;
+    --accent-foreground: #ffffff;
+    --destructive: hsl(0 72% 61%);
+    --border: hsl(255 13% 22%);
+    --input: hsl(255 13% 24%);
+    --ring: #7c65ff;
+}
+
+@layer utilities {
+    /* Override browser autocomplete styling */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus,
+    input:-webkit-autofill:active {
+        -webkit-text-fill-color: var(--foreground) !important;
+
+        /* Transition the background color so slowly it effectively never changes.
+           This preserves the transparent or semi-transparent background styles. */
+        transition: background-color 9999s ease-in-out 0s;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground m-0 text-sm;
+        min-width: 320px;
+        font-family: var(--theme-font);
+        text-rendering: optimizeLegibility;
+    }
+    button:not(:disabled),
+    [role="button"]:not(:disabled) {
+        cursor: pointer;
+    }
+}
+
+@layer components {
+    .bezoom-auth-shell {
+        background: #17131f;
+    }
+
+    .bezoom-auth-hero {
+        isolation: isolate;
+        background: #17131f;
+    }
+
+    .bezoom-auth-hero::before,
+    .bezoom-auth-hero::after,
+    .bezoom-auth-form-panel::before,
+    .bezoom-auth-form-panel::after {
+        position: absolute;
+        z-index: 0;
+        border-radius: 9999px;
+        content: "";
+        pointer-events: none;
+    }
+
+    .bezoom-auth-hero::before {
+        top: -10rem;
+        left: -6rem;
+        width: 34rem;
+        height: 34rem;
+        background: rgb(108 77 255 / 55%);
+        filter: blur(100px);
+    }
+
+    .bezoom-auth-hero::after {
+        right: -12rem;
+        bottom: -12rem;
+        width: 36rem;
+        height: 36rem;
+        background: rgb(255 112 67 / 38%);
+        filter: blur(110px);
+    }
+
+    .bezoom-auth-form-panel {
+        background: #17131f;
+    }
+
+    .bezoom-auth-form-panel::before {
+        top: -12rem;
+        left: -10rem;
+        width: 28rem;
+        height: 28rem;
+        background: rgb(108 77 255 / 52%);
+        filter: blur(100px);
+    }
+
+    .bezoom-auth-form-panel::after {
+        top: 16rem;
+        right: -14rem;
+        width: 30rem;
+        height: 30rem;
+        background: rgb(255 112 67 / 26%);
+        filter: blur(110px);
+    }
+
+    .bezoom-brand,
+    .bezoom-mobile-brand {
+        outline: none;
+        transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+
+    .bezoom-brand:active,
+    .bezoom-mobile-brand:active {
+        transform: scale(0.965);
+    }
+
+    .bezoom-brand:focus-visible,
+    .bezoom-mobile-brand:focus-visible {
+        outline: 2px solid white;
+        outline-offset: 4px;
+    }
+
+    .bezoom-brand img,
+    .bezoom-mobile-brand img {
+        filter: drop-shadow(0 12px 18px rgb(108 77 255 / 35%));
+    }
+
+    .bezoom-wordmark {
+        line-height: 1;
+        font-weight: 900;
+        letter-spacing: -0.055em;
+    }
+
+    .bezoom-hero-back,
+    .bezoom-kicker {
+        border: 1px solid rgb(255 255 255 / 10%);
+        background: rgb(255 255 255 / 8%);
+        color: rgb(255 255 255 / 78%);
+        backdrop-filter: blur(16px);
+    }
+
+    .bezoom-hero-back {
+        transition:
+            color 180ms ease,
+            background-color 180ms ease;
+    }
+
+    .bezoom-hero-back:hover {
+        background: rgb(255 255 255 / 14%);
+        color: white;
+    }
+
+    .bezoom-kicker {
+        color: white;
+    }
+
+    .bezoom-kicker svg,
+    .bezoom-check,
+    .bezoom-lime {
+        color: #c6f36a;
+    }
+
+    .bezoom-hero-title {
+        font-size: clamp(4rem, 8vw, 8rem);
+        line-height: 0.86;
+        letter-spacing: -0.08em;
+    }
+
+    .bezoom-auth-card {
+        gap: 1.25rem;
+        border: 1px solid rgb(255 255 255 / 10%);
+        border-radius: 1.6rem;
+        background: color-mix(in srgb, var(--background) 96%, transparent);
+        box-shadow: 0 24px 70px rgb(0 0 0 / 30%);
+        backdrop-filter: blur(24px);
+        animation: bezoom-slide-up 360ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .bezoom-auth-card > [data-slot="card-header"],
+    .bezoom-auth-card > [data-slot="card-content"] {
+        padding-inline: 1.25rem;
+    }
+
+    .bezoom-auth-title {
+        font-size: clamp(2rem, 8vw, 2.5rem);
+        line-height: 0.98;
+        font-weight: 900;
+        letter-spacing: -0.06em;
+    }
+
+    .bezoom-login-icon {
+        background: rgb(108 77 255 / 10%);
+        color: var(--primary);
+    }
+
+    .bezoom-security-note {
+        background: color-mix(in srgb, var(--muted) 70%, transparent);
+    }
+
+    .bezoom-auth-card [data-slot="input"],
+    .bezoom-auth-card [data-slot="input-group"] {
+        min-height: 3rem;
+        border-radius: 1rem;
+        background: color-mix(in srgb, var(--card) 72%, transparent);
+    }
+
+    .bezoom-auth-card [data-slot="input"]:focus-visible,
+    .bezoom-auth-card [data-slot="input-group"]:focus-within {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 3px rgb(108 77 255 / 18%);
+    }
+
+    .bezoom-auth-card button[type="submit"] {
+        min-height: 3.25rem;
+        border-radius: 1rem;
+        background: linear-gradient(
+            112deg,
+            #6c4dff 0%,
+            #8d5cff 30%,
+            #da62ba 62%,
+            #ff7043 100%
+        );
+        color: white;
+        font-weight: 700;
+        box-shadow: 0 14px 34px rgb(108 77 255 / 28%);
+        transition:
+            transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+            filter 180ms ease;
+    }
+
+    .bezoom-auth-card button[type="submit"]:hover {
+        filter: brightness(1.08);
+    }
+
+    .bezoom-auth-card button[type="submit"]:active {
+        transform: scale(0.975);
+    }
+
+    .bezoom-auth-card a {
+        color: var(--primary);
+        font-weight: 650;
+    }
+
+    .bezoom-home-button {
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    @media (max-width: 1023px) {
+        .bezoom-auth-card {
+            border: 1px solid rgb(255 255 255 / 10%) !important;
+            border-radius: 1.6rem !important;
+            background: color-mix(
+                in srgb,
+                var(--background) 96%,
+                transparent
+            ) !important;
+            box-shadow: 0 24px 70px rgb(0 0 0 / 30%) !important;
+            backdrop-filter: blur(24px) !important;
+        }
+
+        .bezoom-top-bar [data-slot="button"],
+        .bezoom-home-button {
+            border-color: rgb(255 255 255 / 12%) !important;
+            background: rgb(255 255 255 / 8%) !important;
+            color: rgb(255 255 255 / 82%) !important;
+            backdrop-filter: blur(16px);
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .bezoom-auth-form-panel {
+            background:
+                radial-gradient(
+                    circle at 88% 8%,
+                    rgb(108 77 255 / 10%),
+                    transparent 30rem
+                ),
+                var(--background);
+        }
+
+        .bezoom-auth-form-panel::before,
+        .bezoom-auth-form-panel::after {
+            display: none;
+        }
+
+        .bezoom-auth-card {
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            backdrop-filter: none !important;
+        }
+
+        .bezoom-auth-card > [data-slot="card-header"],
+        .bezoom-auth-card > [data-slot="card-content"] {
+            padding-inline: 0;
+        }
+
+        .bezoom-auth-title {
+            font-size: 3rem;
+        }
+    }
+}
+
+@keyframes bezoom-slide-up {
+    from {
+        opacity: 0;
+        transform: translateY(26px) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+    .bezoom-auth-card,
+    .bezoom-hero-back,
+    .bezoom-kicker,
+    .bezoom-top-bar [data-slot="button"] {
+        backdrop-filter: none;
+    }
+}

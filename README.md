@@ -26,6 +26,30 @@ docker compose up -d
 
 Compose uruchamia API wraz z PostgreSQL/PostGIS, Redis, MinIO, Keycloak i Mailpit. API wykonuje migracje przy starcie i nasłuchuje na `http://localhost:4000/api`.
 
+### Motyw logowania Keycloak
+
+Keycloak jest budowany z własnym motywem logowania `bezoom` znajdującym się w katalogu `keycloak-theme`. Motyw bazuje na [starterze Keycloakify shadcn/ui + Tailwind](https://docs.keycloakify.dev/starter-themes/shadcn-ui-tailwind) i wizualnie odpowiada aplikacji webowej: używa brandingu BeZoom, gradientu fiolet–koral, limonkowych akcentów, ciemnego panelu promocyjnego oraz responsywnego układu dla urządzeń mobilnych. Obsługuje jasny i ciemny wariant, a realm domyślnie korzysta z języka polskiego z dostępną wersją angielską.
+
+Wieloetapowy `keycloak-theme/Dockerfile` buduje frontend i produkcyjny JAR Keycloakify, kopiuje go do `/opt/keycloak/providers` obrazu Keycloak 26.7.1, a następnie wykonuje `kc.sh build`. Dzięki temu motyw jest częścią obrazu API i nie wymaga ręcznego montowania wygenerowanych plików. Import `bezoom-realm.json` aktywuje go dla nowego realmu, natomiast usługa `keycloak-config` ustawia go również w istniejącym developerskim realmie.
+
+Pierwsze uruchomienie oraz przebudowa motywu odbywają się razem z Keycloak:
+
+```bash
+docker compose up -d --build keycloak keycloak-config
+```
+
+Podczas pracy nad wyglądem można uruchomić sam podgląd Vite bez Keycloaka:
+
+```bash
+pnpm keycloak-theme:dev
+```
+
+Produkcyjny JAR można zbudować niezależnie. Wynik trafia do `keycloak-theme/dist_keycloak/bezoom-keycloak-theme.jar`:
+
+```bash
+pnpm keycloak-theme:build
+```
+
 Observability jest profilem opcjonalnym:
 
 ```bash

@@ -32,7 +32,9 @@
     "db:migrate": "npx drizzle-kit migrate",
     "db:push": "npx drizzle-kit push",
     "db:seed": "ts-node --transpile-only scripts/seed.ts",
-    "db:seed:event-social-load": "ts-node --transpile-only scripts/seed-event-social-load.ts"
+    "db:seed:event-social-load": "ts-node --transpile-only scripts/seed-event-social-load.ts",
+    "keycloak-theme:dev": "pnpm --dir keycloak-theme dev",
+    "keycloak-theme:build": "pnpm --dir keycloak-theme build-keycloak-theme"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.4",

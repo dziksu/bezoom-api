@@ -233,7 +233,9 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
 
   keycloak:
-    image: keycloak/keycloak:26.7.1
+    image: bezoom-keycloak:local
+    build:
+      context: ./keycloak-theme
     restart: unless-stopped
     command: start-dev --import-realm
     environment:

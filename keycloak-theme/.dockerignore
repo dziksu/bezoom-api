@@ -1,0 +1,6 @@
+node_modules
+dist
+dist_keycloak
+.keycloakify
+public/keycloakify-dev-resources
+*.log
