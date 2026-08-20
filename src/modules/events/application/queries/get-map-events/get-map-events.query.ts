@@ -6,6 +6,10 @@ export class GetMapEventsQuery {
     public readonly north: number,
     public readonly zoom: number,
     public readonly week: number | undefined,
-    public readonly viewerKeycloakSub?: string
+    public readonly viewerKeycloakSub?: string,
+    public readonly countWest?: number,
+    public readonly countSouth?: number,
+    public readonly countEast?: number,
+    public readonly countNorth?: number
   ) {}
 }

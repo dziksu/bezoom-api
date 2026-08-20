@@ -8,6 +8,7 @@ import {
   firstNames,
   interests,
   lastNames,
+  performanceCities,
   type CityDefinition,
   type EventCategory
 } from './seed/catalog';
@@ -168,6 +169,41 @@ const eventPhotoIds: Record<EventCategory, readonly [string, string, string]> = 
 function eventPhotoUrl(category: EventCategory, variant: number): string {
   const photoId = eventPhotoIds[category][variant % eventPhotoIds[category].length];
   return `https://images.unsplash.com/${photoId}?fm=jpg&fit=crop&w=1200&h=675&q=82`;
+}
+
+function eventPhotoCount(random: () => number, scale: ScaleName): number {
+  if (scale !== 'performance') return 1;
+  const roll = random();
+  if (roll < 0.55) return 1;
+  if (roll < 0.82) return 2;
+  return 3;
+}
+
+function eventDescription(
+  random: () => number,
+  scale: ScaleName,
+  title: string,
+  city: CityDefinition,
+  venue: string,
+  details: readonly string[]
+): string {
+  const introduction = `${title} w ${city.name}. Spotykamy się w miejscu ${venue}. Wydarzenie ${pick(random, details)}.`;
+  const longDescriptionChance = scale === 'performance' ? 0.4 : 0.15;
+  if (random() >= longDescriptionChance) {
+    return `${introduction} Szczegóły organizacyjne i aktualizacje pojawią się w aplikacji.`;
+  }
+
+  const paragraphs = [
+    introduction,
+    `W programie przewidzieliśmy kilka części, czas na swobodne rozmowy oraz przestrzeń na pytania uczestników. Całość została przygotowana tak, aby dobrze czuli się zarówno stali bywalcy, jak i osoby, które pojawią się po raz pierwszy. ${pick(random, details)}.`,
+    `Na miejscu warto pojawić się około 15 minut wcześniej. Zabierz wygodny strój, dobry humor i — jeśli masz ochotę — znajomych. Liczba miejsc może być ograniczona, dlatego zapisz wydarzenie i obserwuj komunikaty organizatora.`
+  ];
+  if (random() < 0.45) {
+    paragraphs.push(
+      `Po części głównej planujemy spokojne zakończenie i dodatkowy czas na poznanie innych uczestników. Szczegółowy harmonogram, informacje o dostępności oraz ewentualne zmiany pogodowe opublikujemy w aplikacji przed rozpoczęciem.`
+    );
+  }
+  return paragraphs.join('\n\n');
 }
 
 function avatarPhotoUrl(index: number): string {
@@ -501,7 +537,12 @@ async function seedEvents(client: Client, config: ScaleDefinition, options: Seed
     const category = weightedPick(random, categories, (value) =>
       value === 'MUSIC_AND_NIGHTLIFE' || value === 'FOOD_AND_CULINARY' ? 1.35 : 1
     );
-    const city = weightedPick(random, cities, (value) => value.weight);
+    // The performance fixture is intentionally balanced nationwide. Cycling
+    // through the anchors guarantees that no city dominates a particular run.
+    const city =
+      options.scale === 'performance'
+        ? performanceCities[index % performanceCities.length]
+        : weightedPick(random, cities, (value) => value.weight);
     const district = pick(random, city.districts);
     const venue = pick(random, city.venues);
     const copy = eventCopy[category];
@@ -526,12 +567,14 @@ async function seedEvents(client: Client, config: ScaleDefinition, options: Seed
       state.status === 'PUBLISHED' && state.mediaStatus === 'READY' && state.verification === 'VERIFIED' && !archivedAt;
     const popularity = Math.max(0.05, Math.exp(normal(random) * 1.15) * (dayOffset >= 0 && dayOffset <= 30 ? 1.4 : 1));
     const title = `${pick(random, copy.nouns)} — ${district}`;
+    const photoCount = eventPhotoCount(random, options.scale);
     const photoUrl = eventPhotoUrl(category, index);
+    const description = eventDescription(random, options.scale, title, city, venue, copy.details);
 
     eventRows.push([
       id,
       title,
-      `${title} w ${city.name}. Spotykamy się w miejscu ${venue}. Wydarzenie ${pick(random, copy.details)}. Szczegóły organizacyjne i aktualizacje pojawią się w aplikacji.`,
+      description,
       category,
       startDate,
       endDate,
@@ -571,19 +614,21 @@ async function seedEvents(client: Client, config: ScaleDefinition, options: Seed
       id
     ]);
     if (options.withMedia) {
-      photoRows.push([
-        uuid(`photo:${index}`),
-        id,
-        organizerSub,
-        `seed/v1/external/${id}.jpg`,
-        photoUrl,
-        'READY',
-        0,
-        'image/jpeg',
-        null,
-        createdAt,
-        createdAt
-      ]);
+      for (let position = 0; position < photoCount; position += 1) {
+        photoRows.push([
+          uuid(position === 0 ? `photo:${index}` : `photo:${index}:${position}`),
+          id,
+          organizerSub,
+          position === 0 ? `seed/v1/external/${id}.jpg` : `seed/v1/external/${id}-${position}.jpg`,
+          eventPhotoUrl(category, index + position),
+          'READY',
+          position,
+          'image/jpeg',
+          null,
+          createdAt,
+          createdAt
+        ]);
+      }
     }
     outboxRows.push([
       uuid(`outbox:event:${index}`),

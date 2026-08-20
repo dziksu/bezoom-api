@@ -6,22 +6,27 @@ Data pomiaru: 14 sierpnia 2026. Środowisko: lokalna Colima, Docker Compose, Pos
 
 Seed ma zapewniać realistyczny, powtarzalny zestaw danych do pracy nad mapą wydarzeń i pomiarów wydajności. Daty eventów są przesuwane względem chwili uruchomienia, natomiast UUID pozostają stabilne. Każde ponowne uruchomienie zastępuje wyłącznie dane oznaczone prefiksem `seed:v1:`.
 
+Eventy profilu `performance` są rozdzielane cyklicznie i równomiernie między 50 ośrodków obejmujących cały kraj (49 dawnych miast wojewódzkich oraz Gdynię). Każdy ośrodek dostaje więc 800 z 40 000 eventów, zamiast rozkładu ważonego z dominującym klastrem warszawskim używanego przez mniejsze profile.
+
+Dla bardziej realistycznych testów szczegółów eventu 40% rekordów ma długi, wieloakapitowy opis, a galerie zdjęć w 45% rekordów zawierają 2–3 pozycje. Pozostałe eventy zachowują krótki opis i jedno zdjęcie.
+
 Profil `performance` tworzy:
 
-| Zasób                        | Liczba rekordów |
-| ---------------------------- | --------------: |
-| Profile                      |          25 000 |
-| Twórcy                       |           1 500 |
-| Eventy i lokalizacje         |          40 000 |
-| Zdjęcia i statystyki eventów |          40 000 |
-| Lajki                        |         600 000 |
-| Zapisy                       |         260 000 |
-| RSVP                         |         380 000 |
-| Komentarze                   |         120 000 |
-| Znajomości                   |         200 000 |
-| Notyfikacje                  |         350 000 |
-| Blokady                      |           2 000 |
-| Zgłoszenia                   |           1 000 |
+| Zasób                | Liczba rekordów |
+| -------------------- | --------------: |
+| Profile              |          25 000 |
+| Twórcy               |           1 500 |
+| Eventy i lokalizacje |          40 000 |
+| Statystyki eventów   |          40 000 |
+| Zdjęcia              |         ~65 000 |
+| Lajki                |         600 000 |
+| Zapisy               |         260 000 |
+| RSVP                 |         380 000 |
+| Komentarze           |         120 000 |
+| Znajomości           |         200 000 |
+| Notyfikacje          |         350 000 |
+| Blokady              |           2 000 |
+| Zgłoszenia           |           1 000 |
 
 Uruchomienie:
 

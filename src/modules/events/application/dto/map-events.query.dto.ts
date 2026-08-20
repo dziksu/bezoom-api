@@ -32,6 +32,30 @@ export class MapEventsQueryDto {
   @Max(MAP_MAX_ZOOM)
   zoom: number;
 
+  @ApiPropertyOptional({ example: 20.82, description: 'Western longitude used for the exact total count.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsLongitude()
+  countWest?: number;
+
+  @ApiPropertyOptional({ example: 52.1, description: 'Southern latitude used for the exact total count.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsLatitude()
+  countSouth?: number;
+
+  @ApiPropertyOptional({ example: 21.2, description: 'Eastern longitude used for the exact total count.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsLongitude()
+  countEast?: number;
+
+  @ApiPropertyOptional({ example: 52.36, description: 'Northern latitude used for the exact total count.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsLatitude()
+  countNorth?: number;
+
   @ApiPropertyOptional({
     example: 0,
     description: '0 = current week (Mon-Sun, Europe/Warsaw), 1 = next week, etc. Omit for no week filter.'

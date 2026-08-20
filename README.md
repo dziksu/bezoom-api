@@ -43,7 +43,7 @@ docker compose --profile observability up -d
 
 ## Realistyczny seed danych
 
-Seed tworzy przekrojowy obraz rosnącej aplikacji eventowej w Polsce: profile zakładane w ciągu ostatnich 18 miesięcy, coraz liczniejszą grupę twórców, wszystkie kategorie eventów, lokalizacje w 18 miastach oraz aktywność o nierównym rozkładzie popularności. Daty eventów są zawsze liczone względem chwili uruchomienia — obejmują historię, bieżący tydzień i kolejne miesiące. Dane mają stabilne UUID i są oznaczone technicznym prefiksem `seed:v1:`, więc ponowne uruchomienie usuwa wyłącznie poprzedni seed, nie dane utworzone ręcznie.
+Seed tworzy przekrojowy obraz rosnącej aplikacji eventowej w Polsce: profile zakładane w ciągu ostatnich 18 miesięcy, coraz liczniejszą grupę twórców, wszystkie kategorie eventów oraz aktywność o nierównym rozkładzie popularności. Profile `demo` i `development` korzystają z ważonego zestawu 18 największych miast. Profil `performance` rozkłada eventy równomiernie między 50 ośrodków w całej Polsce, bez dominującego klastra; 40% eventów ma rozbudowany, wieloakapitowy opis, a 45% galerię z 2–3 zdjęciami. Daty eventów są zawsze liczone względem chwili uruchomienia — obejmują historię, bieżący tydzień i kolejne miesiące. Dane mają stabilne UUID i są oznaczone technicznym prefiksem `seed:v1:`, więc ponowne uruchomienie usuwa wyłącznie poprzedni seed, nie dane utworzone ręcznie.
 
 Po uruchomieniu usług i migracji:
 

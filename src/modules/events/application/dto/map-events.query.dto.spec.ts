@@ -10,7 +10,11 @@ describe('MapEventsQueryDto', () => {
       east: 24.2,
       north: 54.9,
       zoom: MAP_MIN_ZOOM,
-      week: 0
+      week: 0,
+      countWest: 14.5,
+      countSouth: 49.2,
+      countEast: 24,
+      countNorth: 54.7
     });
 
     await expect(validate(dto)).resolves.toEqual([]);

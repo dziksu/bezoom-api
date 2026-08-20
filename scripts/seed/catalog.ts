@@ -172,6 +172,58 @@ export const cities: CityDefinition[] = [
   }
 ];
 
+function regionalCity(name: string, latitude: number, longitude: number): CityDefinition {
+  return {
+    name,
+    latitude,
+    longitude,
+    weight: 1,
+    districts: ['Centrum', 'Stare Miasto', 'Północ', 'Południe'],
+    venues: ['Rynek', 'Park Miejski', 'Bulwary', 'Centrum Kultury']
+  };
+}
+
+/**
+ * A nationwide set of event anchors used by the performance seed. It includes
+ * all 49 former voivodeship capitals plus Gdynia, so even a zoomed-out map has
+ * representative data across the whole country instead of one dominant cluster.
+ */
+export const performanceCities: CityDefinition[] = [
+  ...cities,
+  regionalCity('Biała Podlaska', 52.0324, 23.1165),
+  regionalCity('Bielsko-Biała', 49.8224, 19.0584),
+  regionalCity('Chełm', 51.1431, 23.4712),
+  regionalCity('Ciechanów', 52.8814, 20.6196),
+  regionalCity('Częstochowa', 50.8118, 19.1203),
+  regionalCity('Elbląg', 54.1561, 19.4045),
+  regionalCity('Gorzów Wielkopolski', 52.7325, 15.2369),
+  regionalCity('Jelenia Góra', 50.9044, 15.7194),
+  regionalCity('Kalisz', 51.7611, 18.091),
+  regionalCity('Konin', 52.223, 18.2511),
+  regionalCity('Koszalin', 54.1944, 16.1722),
+  regionalCity('Krosno', 49.6887, 21.7706),
+  regionalCity('Legnica', 51.207, 16.1553),
+  regionalCity('Leszno', 51.8419, 16.5749),
+  regionalCity('Łomża', 53.1781, 22.0594),
+  regionalCity('Nowy Sącz', 49.6218, 20.697),
+  regionalCity('Ostrołęka', 53.0833, 21.5757),
+  regionalCity('Piła', 53.1515, 16.7382),
+  regionalCity('Piotrków Trybunalski', 51.4052, 19.703),
+  regionalCity('Płock', 52.5463, 19.7065),
+  regionalCity('Przemyśl', 49.7839, 22.7678),
+  regionalCity('Radom', 51.4027, 21.1471),
+  regionalCity('Siedlce', 52.1676, 22.2902),
+  regionalCity('Sieradz', 51.5956, 18.7303),
+  regionalCity('Skierniewice', 51.9547, 20.1583),
+  regionalCity('Słupsk', 54.4641, 17.0287),
+  regionalCity('Suwałki', 54.1115, 22.9308),
+  regionalCity('Tarnobrzeg', 50.573, 21.6794),
+  regionalCity('Tarnów', 50.0121, 20.9858),
+  regionalCity('Wałbrzych', 50.7714, 16.2843),
+  regionalCity('Włocławek', 52.6483, 19.0677),
+  regionalCity('Zamość', 50.7231, 23.2519)
+];
+
 export const eventCopy: Record<EventCategory, { nouns: string[]; details: string[] }> = {
   ARTS_AND_CULTURE: {
     nouns: ['Wystawa młodej sztuki', 'Noc galerii', 'Spacer architektoniczny', 'Warsztaty ceramiczne'],

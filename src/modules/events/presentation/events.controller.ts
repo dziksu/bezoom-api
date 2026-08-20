@@ -207,7 +207,19 @@ export class EventsController {
     @CurrentUser() user?: ICurrentUser
   ): Promise<MapEventsResponseDto> {
     return this.queryBus.execute(
-      new GetMapEventsQuery(query.west, query.south, query.east, query.north, query.zoom, query.week, user?.id)
+      new GetMapEventsQuery(
+        query.west,
+        query.south,
+        query.east,
+        query.north,
+        query.zoom,
+        query.week,
+        user?.id,
+        query.countWest,
+        query.countSouth,
+        query.countEast,
+        query.countNorth
+      )
     );
   }
 

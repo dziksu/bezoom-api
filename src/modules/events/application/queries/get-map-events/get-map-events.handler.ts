@@ -54,6 +54,10 @@ interface MapAggregateRow {
   events: MapPinRow[] | null;
 }
 
+interface MapCountRow {
+  count: string | number;
+}
+
 @QueryHandler(GetMapEventsQuery)
 export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, MapEventsResponseDto> {
   constructor(
@@ -67,6 +71,7 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
     if (query.west >= query.east || query.south >= query.north) {
       throw new BadRequestException('MAP_BOUNDS_INVALID');
     }
+    const countBounds = this.countBounds(query);
 
     const individualReachKm = this.individualReachForZoom(query.zoom);
     const scope: SectorScope = individualReachKm >= 25 ? 'CITY_PLUS' : 'ALL';
@@ -96,9 +101,11 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
       for (const event of cached.get(key) ?? loaded.get(key) ?? []) uniqueEvents.set(event.id, event);
     }
 
+    const blockedOrganizerIds = query.viewerKeycloakSub
+      ? await this.blockedOrganizerIds(query.viewerKeycloakSub)
+      : new Set<string>();
     let events = [...uniqueEvents.values()].filter((event) => new Date(event.startDate).getTime() > Date.now());
-    if (query.viewerKeycloakSub) {
-      const blockedOrganizerIds = await this.blockedOrganizerIds(query.viewerKeycloakSub);
+    if (blockedOrganizerIds.size > 0) {
       events = events.filter((event) => !event.organizerId || !blockedOrganizerIds.has(event.organizerId));
     }
 
@@ -111,14 +118,84 @@ export class GetMapEventsHandler implements IQueryHandler<GetMapEventsQuery, Map
       }))
       .sort((left, right) => right.reachKm - left.reachKm || +new Date(left.startDate) - +new Date(right.startDate));
 
+    const totalCount = await this.loadTotalCount(countBounds, query.week, blockedOrganizerIds);
+
     return {
       events,
       clusters: [],
-      totalCount: events.length,
-      representedCount: events.length,
+      totalCount,
+      returnedCount: events.length,
+      representedCount: totalCount,
       individualReachKm,
       zoom: query.zoom
     };
+  }
+
+  private countBounds(query: GetMapEventsQuery): MapSectorBounds {
+    const supplied = [query.countWest, query.countSouth, query.countEast, query.countNorth];
+    const suppliedCount = supplied.filter((value) => value !== undefined).length;
+    if (suppliedCount !== 0 && suppliedCount !== supplied.length) {
+      throw new BadRequestException('MAP_COUNT_BOUNDS_INCOMPLETE');
+    }
+
+    const bounds =
+      suppliedCount === supplied.length
+        ? {
+            west: query.countWest!,
+            south: query.countSouth!,
+            east: query.countEast!,
+            north: query.countNorth!
+          }
+        : { west: query.west, south: query.south, east: query.east, north: query.north };
+    if (bounds.west >= bounds.east || bounds.south >= bounds.north) {
+      throw new BadRequestException('MAP_COUNT_BOUNDS_INVALID');
+    }
+    return bounds;
+  }
+
+  private async loadTotalCount(
+    bounds: MapSectorBounds,
+    week: number | undefined,
+    blockedOrganizerIds: Set<string>
+  ): Promise<number> {
+    const weekIsNull = week === undefined;
+    const weekOffset = week ?? 0;
+    const blockedFilter =
+      blockedOrganizerIds.size > 0
+        ? sql`AND organizer.id NOT IN (${sql.join(
+            [...blockedOrganizerIds].map((id) => sql`${id}`),
+            sql`, `
+          )})`
+        : sql``;
+    const raw: unknown = await this.readService.db.execute(sql`
+      WITH params AS (
+        SELECT
+          ST_MakeEnvelope(${bounds.west}, ${bounds.south}, ${bounds.east}, ${bounds.north}, 4326) AS envelope,
+          (date_trunc('week', (now() AT TIME ZONE 'Europe/Warsaw')) + (${weekOffset} * interval '7 days')) AS week_start
+      )
+      SELECT count(*)::int AS count
+      FROM params p
+      JOIN locations l
+        ON l.geog && p.envelope::geography
+       AND ST_Intersects(l.geog, p.envelope::geography)
+      JOIN events e ON e.id = l.event_id
+      JOIN profiles organizer ON organizer.keycloak_sub = e.organizer_keycloak_sub
+      WHERE e.status = 'PUBLISHED'
+        AND e.verification_status = 'VERIFIED'
+        AND e.visibility = 'PUBLIC'
+        AND e.media_pipeline_status = 'READY'
+        AND e.archived_at IS NULL
+        AND e.start_date > now()
+        AND organizer.account_status = 'ACTIVE'
+        ${blockedFilter}
+        AND (
+          ${weekIsNull} OR (
+            (e.start_date AT TIME ZONE 'Europe/Warsaw') >= p.week_start
+            AND (e.start_date AT TIME ZONE 'Europe/Warsaw') < p.week_start + interval '7 days'
+          )
+        )
+    `);
+    return Number((raw as { rows: MapCountRow[] }).rows[0]?.count ?? 0);
   }
 
   private async loadMissingSectors(

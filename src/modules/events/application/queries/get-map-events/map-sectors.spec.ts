@@ -32,6 +32,6 @@ describe('map sectors', () => {
   });
 
   it('builds readable versioned cache keys', () => {
-    expect(sectorCacheKey(7, 0, 'ALL', { zoom: 11, x: 1143, y: 671 })).toBe('v7:0:ALL:11:1143:671');
+    expect(sectorCacheKey(7, 0, 'ALL', { zoom: 11, x: 1143, y: 671 })).toBe('reach-v2:v7:0:ALL:11:1143:671');
   });
 });

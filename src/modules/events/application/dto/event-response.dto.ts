@@ -203,8 +203,13 @@ export class MapEventsResponseDto {
   @ApiProperty({ type: [MapEventClusterDto], description: 'Deprecated; map events are no longer clustered.' })
   clusters: MapEventClusterDto[];
 
-  @ApiProperty({ description: 'Exact number of events returned for the viewport and zoom.' })
+  @ApiProperty({
+    description: 'Exact number of eligible events in the visible viewport, including lower-reach events.'
+  })
   totalCount: number;
+
+  @ApiProperty({ description: 'Number of event pins returned at the current zoom.' })
+  returnedCount: number;
 
   @ApiProperty({ description: 'Deprecated compatibility field; equals totalCount.' })
   representedCount: number;
