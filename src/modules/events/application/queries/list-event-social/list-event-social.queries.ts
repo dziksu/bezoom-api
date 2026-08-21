@@ -7,6 +7,15 @@ export class ListEventCommentsQuery {
   ) {}
 }
 
+export class ListCommentMentionSuggestionsQuery {
+  constructor(
+    public readonly eventId: string,
+    public readonly query: string | undefined,
+    public readonly limit: number,
+    public readonly viewerKeycloakSub: string
+  ) {}
+}
+
 export class ListEventLikesQuery {
   constructor(
     public readonly eventId: string,

@@ -8,6 +8,11 @@ export function toEventCommentDto(comment: EventCommentRecord): EventCommentDto 
     parentId: comment.parentId,
     body: comment.body,
     author: comment.author,
+    authorRole: comment.authorRole,
+    mentions: comment.mentions,
+    likesCount: comment.likesCount,
+    likedByViewer: comment.likedByViewer,
+    organizerLike: comment.organizerLike,
     createdAt: comment.createdAt,
     updatedAt: comment.updatedAt,
     isEdited: comment.editedAt !== undefined

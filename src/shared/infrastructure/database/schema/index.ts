@@ -11,6 +11,8 @@ export { eventSaves } from './event-saves';
 export { eventStats } from './event-stats';
 export { eventOutbox } from './event-outbox';
 export { eventComments } from './event-comments';
+export { eventCommentLikes } from './event-comment-likes';
+export { eventCommentMentions } from './event-comment-mentions';
 export { friendships } from './friendships';
 export { businesses } from './businesses';
 export { notifications } from './notifications';

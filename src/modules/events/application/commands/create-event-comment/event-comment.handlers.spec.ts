@@ -7,6 +7,8 @@ import { UpdateEventCommentHandler } from '../update-event-comment/update-event-
 import { DeleteEventCommentCommand } from '../delete-event-comment/delete-event-comment.command';
 import { DeleteEventCommentHandler } from '../delete-event-comment/delete-event-comment.handler';
 import type { UserBlockRepository } from '@api/modules/safety/domain/user-block.repository';
+import { SetEventCommentLikeCommand } from '../set-event-comment-like/set-event-comment-like.command';
+import { SetEventCommentLikeHandler } from '../set-event-comment-like/set-event-comment-like.handler';
 
 describe('event comment handlers', () => {
   const eventId = 'a0cf776e-5e07-497f-a32e-cd5eb1243312';
@@ -17,6 +19,9 @@ describe('event comment handlers', () => {
     eventId,
     body: 'Useful comment',
     author: { id: '7bf116b7-d9ca-498f-aabb-0e3dbaf616f5', username: 'anna' },
+    mentions: [],
+    likesCount: 0,
+    likedByViewer: false,
     createdAt: new Date('2026-08-13T12:00:00.000Z'),
     updatedAt: new Date('2026-08-13T12:00:00.000Z')
   };
@@ -25,7 +30,9 @@ describe('event comment handlers', () => {
     const comments = {
       create: jest.fn().mockResolvedValue(comment),
       updateOwned: jest.fn().mockResolvedValue({ ...comment, editedAt: new Date() }),
-      deleteOwned: jest.fn().mockResolvedValue(true)
+      deleteOwned: jest.fn().mockResolvedValue(true),
+      findEngagementTarget: jest.fn().mockResolvedValue({ authorKeycloakSub: authorSub }),
+      setLike: jest.fn().mockResolvedValue({ liked: true, likesCount: 1 })
     };
     const engagement = {
       findEventForEngagement: jest.fn().mockResolvedValue({
@@ -44,7 +51,8 @@ describe('event comment handlers', () => {
       blocks,
       create: new CreateEventCommentHandler(comments, engagement, blocks as unknown as UserBlockRepository),
       update: new UpdateEventCommentHandler(comments),
-      delete: new DeleteEventCommentHandler(comments)
+      delete: new DeleteEventCommentHandler(comments),
+      like: new SetEventCommentLikeHandler(comments, engagement, blocks as unknown as UserBlockRepository)
     };
   };
 
@@ -55,6 +63,19 @@ describe('event comment handlers', () => {
 
     expect(comments.create).toHaveBeenCalledWith(eventId, authorSub, 'Useful comment', undefined);
     expect(result).toMatchObject({ id: commentId, body: 'Useful comment', isEdited: false });
+  });
+
+  it('likes a visible comment idempotently after block checks', async () => {
+    const { like, comments, blocks } = build();
+
+    await expect(like.execute(new SetEventCommentLikeCommand(eventId, commentId, 'viewer-sub', true))).resolves.toEqual(
+      {
+        liked: true,
+        likesCount: 1
+      }
+    );
+    expect(blocks.isBlockedBetween).toHaveBeenCalledTimes(2);
+    expect(comments.setLike).toHaveBeenCalledWith(eventId, commentId, 'viewer-sub', true);
   });
 
   it('rejects empty content and masks a non-public event', async () => {

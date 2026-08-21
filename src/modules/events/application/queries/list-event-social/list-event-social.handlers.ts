@@ -1,7 +1,16 @@
 import { QueryHandler, type IQueryHandler } from '@nestjs/cqrs';
 import { EventSocialReadService } from '../../../infrastructure/read/event-social-read.service';
-import type { CursorEventActorsDto, CursorEventCommentsDto } from '../../dto/event-social.dto';
-import { ListEventCommentsQuery, ListEventLikesQuery, ListEventParticipantsQuery } from './list-event-social.queries';
+import type {
+  CommentMentionSuggestionsDto,
+  CursorEventActorsDto,
+  CursorEventCommentsDto
+} from '../../dto/event-social.dto';
+import {
+  ListCommentMentionSuggestionsQuery,
+  ListEventCommentsQuery,
+  ListEventLikesQuery,
+  ListEventParticipantsQuery
+} from './list-event-social.queries';
 
 @QueryHandler(ListEventCommentsQuery)
 export class ListEventCommentsHandler implements IQueryHandler<ListEventCommentsQuery, CursorEventCommentsDto> {
@@ -9,6 +18,18 @@ export class ListEventCommentsHandler implements IQueryHandler<ListEventComments
 
   execute(query: ListEventCommentsQuery): Promise<CursorEventCommentsDto> {
     return this.readService.listComments(query.eventId, query.cursor, query.limit, query.viewerKeycloakSub);
+  }
+}
+
+@QueryHandler(ListCommentMentionSuggestionsQuery)
+export class ListCommentMentionSuggestionsHandler implements IQueryHandler<
+  ListCommentMentionSuggestionsQuery,
+  CommentMentionSuggestionsDto
+> {
+  constructor(private readonly readService: EventSocialReadService) {}
+
+  execute(query: ListCommentMentionSuggestionsQuery): Promise<CommentMentionSuggestionsDto> {
+    return this.readService.listMentionSuggestions(query.eventId, query.query, query.limit, query.viewerKeycloakSub);
   }
 }
 

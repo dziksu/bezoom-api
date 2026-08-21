@@ -24,6 +24,7 @@ import { ArchiveEventHandler } from './application/commands/archive-event/archiv
 import { CreateEventCommentHandler } from './application/commands/create-event-comment/create-event-comment.handler';
 import { UpdateEventCommentHandler } from './application/commands/update-event-comment/update-event-comment.handler';
 import { DeleteEventCommentHandler } from './application/commands/delete-event-comment/delete-event-comment.handler';
+import { SetEventCommentLikeHandler } from './application/commands/set-event-comment-like/set-event-comment-like.handler';
 import { SearchEventsByLocationHandler } from './application/queries/search-events-by-location/search-events-by-location.handler';
 import { GetMapEventsHandler } from './application/queries/get-map-events/get-map-events.handler';
 import { GetEventByIdHandler } from './application/queries/get-event-by-id/get-event-by-id.handler';
@@ -35,6 +36,7 @@ import { GetMyEventStatsHandler } from './application/queries/get-my-event-stats
 import { GetEventViewerStateHandler } from './application/queries/get-event-viewer-state/get-event-viewer-state.handler';
 import {
   ListEventCommentsHandler,
+  ListCommentMentionSuggestionsHandler,
   ListEventLikesHandler,
   ListEventParticipantsHandler
 } from './application/queries/list-event-social/list-event-social.handlers';
@@ -59,7 +61,8 @@ const commandHandlers = [
   ArchiveEventHandler,
   CreateEventCommentHandler,
   UpdateEventCommentHandler,
-  DeleteEventCommentHandler
+  DeleteEventCommentHandler,
+  SetEventCommentLikeHandler
 ];
 const queryHandlers = [
   SearchEventsByLocationHandler,
@@ -72,6 +75,7 @@ const queryHandlers = [
   ListMyLikedEventsHandler,
   ListMySavedEventsHandler,
   ListEventCommentsHandler,
+  ListCommentMentionSuggestionsHandler,
   ListEventLikesHandler,
   ListEventParticipantsHandler
 ];

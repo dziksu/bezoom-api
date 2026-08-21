@@ -19,6 +19,9 @@ import { RedisRateLimit } from '@api/shared/infrastructure/rate-limit';
 import { CursorQueryDto } from '../application/dto/cursor-query.dto';
 import {
   CreateEventCommentDto,
+  CommentLikeResponseDto,
+  CommentMentionSuggestionsDto,
+  CommentMentionSuggestionsQueryDto,
   CursorEventActorsDto,
   CursorEventCommentsDto,
   EventCommentDto,
@@ -27,7 +30,9 @@ import {
 import { CreateEventCommentCommand } from '../application/commands/create-event-comment/create-event-comment.command';
 import { UpdateEventCommentCommand } from '../application/commands/update-event-comment/update-event-comment.command';
 import { DeleteEventCommentCommand } from '../application/commands/delete-event-comment/delete-event-comment.command';
+import { SetEventCommentLikeCommand } from '../application/commands/set-event-comment-like/set-event-comment-like.command';
 import {
+  ListCommentMentionSuggestionsQuery,
   ListEventCommentsQuery,
   ListEventLikesQuery,
   ListEventParticipantsQuery
@@ -52,6 +57,18 @@ export class EventCommentsController {
     @CurrentUser() user?: ICurrentUser
   ): Promise<CursorEventCommentsDto> {
     return this.queryBus.execute(new ListEventCommentsQuery(eventId, query.cursor, query.limit ?? 20, user?.id));
+  }
+
+  @ApiOperation({ summary: 'Suggest event commenters for an @mention' })
+  @ApiResponse({ status: 200, type: CommentMentionSuggestionsDto })
+  @Get('comments/mention-suggestions')
+  @RedisRateLimit({ name: 'event_comment_mentions_user', limit: 60, windowSeconds: 60, scopes: ['user'] })
+  listMentionSuggestions(
+    @CurrentUser() user: ICurrentUser,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Query() query: CommentMentionSuggestionsQueryDto
+  ): Promise<CommentMentionSuggestionsDto> {
+    return this.queryBus.execute(new ListCommentMentionSuggestionsQuery(eventId, query.query, query.limit, user.id));
   }
 
   @ApiOperation({ summary: 'Add an event comment or one-level reply' })
@@ -92,6 +109,30 @@ export class EventCommentsController {
     @Param('commentId', ParseUUIDPipe) commentId: string
   ): Promise<void> {
     return this.commandBus.execute(new DeleteEventCommentCommand(eventId, commentId, user.id));
+  }
+
+  @ApiOperation({ summary: 'Like a comment' })
+  @ApiResponse({ status: 200, type: CommentLikeResponseDto })
+  @Post('comments/:commentId/like')
+  @RedisRateLimit({ name: 'event_comment_like_user', limit: 60, windowSeconds: 60, scopes: ['user'] })
+  likeComment(
+    @CurrentUser() user: ICurrentUser,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string
+  ): Promise<CommentLikeResponseDto> {
+    return this.commandBus.execute(new SetEventCommentLikeCommand(eventId, commentId, user.id, true));
+  }
+
+  @ApiOperation({ summary: 'Remove my comment like' })
+  @ApiResponse({ status: 200, type: CommentLikeResponseDto })
+  @Delete('comments/:commentId/like')
+  @RedisRateLimit({ name: 'event_comment_unlike_user', limit: 60, windowSeconds: 60, scopes: ['user'] })
+  unlikeComment(
+    @CurrentUser() user: ICurrentUser,
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Param('commentId', ParseUUIDPipe) commentId: string
+  ): Promise<CommentLikeResponseDto> {
+    return this.commandBus.execute(new SetEventCommentLikeCommand(eventId, commentId, user.id, false));
   }
 
   @ApiOperation({ summary: 'Load public profiles that liked the event' })
