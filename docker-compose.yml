@@ -29,7 +29,7 @@
 #   1025  – Mailpit SMTP
 #   8025  – Mailpit Web UI → http://localhost:8025
 #   3010  – Redis Commander → http://localhost:3010
-#   8082  – Nominatim      → http://localhost:8082
+#   8092  – Nominatim      → http://localhost:8092
 #   8001  – Redis Insight  → http://localhost:8001
 #   9090  – Prometheus     → http://localhost:9090
 #   3001  – Grafana        → http://localhost:3001
@@ -398,7 +398,7 @@ services:
 #      IMPORT_ADDRESS_ONLY: "true"
 #      THREADS: "4"
 #    ports:
-#      - "${NOMINATIM_PORT:-8082}:8080"
+#      - "${NOMINATIM_PORT:-8092}:8080"
 #    volumes:
 #      - nominatim_data:/var/lib/postgresql/16/main
 #    shm_size: 2gb
