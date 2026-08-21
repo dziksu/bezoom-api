@@ -273,7 +273,7 @@ export class ProfileService {
         .set({
           username: updateDto.username ?? profile.username,
           bio: updateDto.bio ?? profile.bio,
-          interests: updateDto.interests ?? profile.interests,
+          favoriteCategories: updateDto.favoriteCategories ?? profile.favoriteCategories,
           isPrivate: updateDto.isPrivate !== undefined ? updateDto.isPrivate : profile.isPrivate,
           updatedAt: new Date()
         })
@@ -666,7 +666,7 @@ export class ProfileService {
       email: profile.email ?? undefined,
       bio: profile.bio ?? undefined,
       avatarUrl: profile.avatarUrl ?? undefined,
-      interests: profile.interests ?? undefined,
+      favoriteCategories: profile.favoriteCategories ?? undefined,
       isPhoneVerified: profile.isPhoneVerified,
       followersCount: profile.followersCount,
       followingCount: profile.followingCount,
@@ -706,7 +706,7 @@ export class ProfileService {
       : {
           ...common,
           bio: profile.bio ?? undefined,
-          interests: profile.interests ?? undefined
+          favoriteCategories: profile.favoriteCategories ?? undefined
         };
   }
 }

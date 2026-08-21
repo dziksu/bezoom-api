@@ -250,7 +250,7 @@ export class AccountDeletionWorker implements OnApplicationBootstrap, OnModuleDe
           bio: null,
           avatarUrl: null,
           avatarStoragePath: null,
-          interests: null,
+          favoriteCategories: null,
           isPhoneVerified: false,
           phoneVerificationToken: null,
           phoneVerificationExpiresAt: null,

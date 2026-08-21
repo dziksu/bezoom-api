@@ -5,14 +5,16 @@ import {
   MaxLength,
   IsPhoneNumber,
   IsArray,
-  ArrayMaxSize,
+  ArrayUnique,
   IsUrl,
   IsNotEmpty,
   Matches,
-  IsBoolean
+  IsBoolean,
+  IsEnum
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { EVENT_CATEGORIES, type EventCategory } from '@api/modules/events/domain/event.aggregate';
 
 /**
  * Update Personal Profile DTO
@@ -39,13 +41,12 @@ export class UpdateProfileDto {
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   bio?: string;
 
-  @ApiProperty({ example: ['music', 'sports', 'art'], required: false })
+  @ApiProperty({ enum: EVENT_CATEGORIES, isArray: true, required: false })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(10)
-  @IsString({ each: true })
-  @MaxLength(50, { each: true })
-  interests?: string[];
+  @ArrayUnique()
+  @IsEnum(EVENT_CATEGORIES, { each: true })
+  favoriteCategories?: EventCategory[];
 
   @ApiProperty({ example: false, required: false })
   @IsOptional()
@@ -195,8 +196,8 @@ export class ProfileResponseDto {
   @ApiPropertyOptional()
   avatarUrl?: string;
 
-  @ApiPropertyOptional({ type: [String] })
-  interests?: string[];
+  @ApiPropertyOptional({ enum: EVENT_CATEGORIES, isArray: true })
+  favoriteCategories?: EventCategory[];
 
   @ApiProperty()
   isPhoneVerified: boolean;
@@ -249,8 +250,8 @@ export class PublicProfileResponseDto {
   @ApiProperty({ required: false })
   avatarUrl?: string;
 
-  @ApiProperty({ required: false, type: [String] })
-  interests?: string[];
+  @ApiProperty({ required: false, enum: EVENT_CATEGORIES, isArray: true })
+  favoriteCategories?: EventCategory[];
 
   @ApiProperty()
   followersCount: number;

@@ -20,12 +20,14 @@ The User Profile Module provides comprehensive profile management for BeZoom use
 The module uses a **dual-mode file storage system**:
 
 #### Development Mode (`NODE_ENV !== 'production'`)
+
 - Files are stored on **local disk** at `./uploads` directory
 - No MinIO dependency required
 - Perfect for local development and testing
 - Files are organized by bucket: `./uploads/avatars/`, `./uploads/media/`, etc.
 
 #### Production Mode (`NODE_ENV === 'production'`)
+
 - Files are stored in **MinIO** S3-compatible object storage
 - Easy migration to Cloudflare R2 (same S3 API)
 - Configurable endpoints and credentials via environment variables
@@ -72,28 +74,28 @@ profiles (
   bio: Text
   avatar_url: Text - URL to avatar
   avatar_storage_path: Text - Storage path for cleanup
-  interests: Text[] - Array of interest tags
-  
+  favorite_categories: event_category[] - Favorite event categories
+
   // Business fields
   business_name: Text
   nip: Varchar(10) (Unique) - Polish tax ID
   business_description: Text
   website_url: Text
-  
+
   // Verification
   is_phone_verified: Boolean
   phone_verification_token: Text (temporary)
   business_verification_status: Varchar - 'unverified'|'pending'|'verified'|'rejected'
   business_verification_date: Timestamp
-  
+
   // Social
   followers_count: Integer
   following_count: Integer
-  
+
   // Settings
   is_private: Boolean
   is_deactivated: Boolean
-  
+
   // Timestamps
   created_at: Timestamp
   updated_at: Timestamp
@@ -105,12 +107,14 @@ profiles (
 ### Personal Profile
 
 #### Get Current User's Profile
+
 ```http
 GET /user/profile
 Authorization: Bearer <token>
 ```
 
 **Response:**
+
 ```json
 {
   "id": "uuid",
@@ -122,7 +126,7 @@ Authorization: Bearer <token>
   "email": "john@example.com",
   "bio": "Loves events!",
   "avatarUrl": "/uploads/avatars/file.jpg",
-  "interests": ["music", "sports"],
+  "favoriteCategories": ["MUSIC_AND_NIGHTLIFE", "SPORT_AND_RECREATION"],
   "followersCount": 42,
   "followingCount": 15,
   "isPrivate": false,
@@ -132,12 +136,14 @@ Authorization: Bearer <token>
 ```
 
 #### Get Public Profile
+
 ```http
 GET /user/profile/:profileId
 Authorization: Bearer <token>
 ```
 
 #### Update Profile
+
 ```http
 PATCH /user/profile
 Authorization: Bearer <token>
@@ -148,7 +154,7 @@ Content-Type: application/json
   "lastName": "Doe",
   "username": "johndoe",
   "bio": "Updated bio",
-  "interests": ["music", "sports", "art"],
+  "favoriteCategories": ["MUSIC_AND_NIGHTLIFE", "SPORT_AND_RECREATION", "ARTS_AND_CULTURE"],
   "isPrivate": false
 }
 ```
@@ -156,6 +162,7 @@ Content-Type: application/json
 ### Avatar Management
 
 #### Upload Avatar
+
 ```http
 POST /user/profile/avatar
 Authorization: Bearer <token>
@@ -165,11 +172,13 @@ file: <binary image data>
 ```
 
 **Constraints:**
+
 - Max size: 5MB
 - Allowed types: JPEG, PNG, WebP, GIF
 - Old avatar is automatically deleted
 
 #### Delete Avatar
+
 ```http
 DELETE /user/profile/avatar
 Authorization: Bearer <token>
@@ -178,6 +187,7 @@ Authorization: Bearer <token>
 ### Business Profile
 
 #### Create Business Profile
+
 ```http
 POST /user/profile/business
 Authorization: Bearer <token>
@@ -194,12 +204,14 @@ Content-Type: application/json
 ```
 
 **Notes:**
+
 - NIP must be 10 digits
 - NIP must be unique across all businesses
 - Creates verification pending status
 - Account type converted to 'business'
 
 #### Update Business Profile
+
 ```http
 PATCH /user/profile/business
 Authorization: Bearer <token>
@@ -214,6 +226,7 @@ Content-Type: application/json
 ### Phone Verification
 
 #### Request Phone Verification
+
 ```http
 POST /user/profile/phone/request-verification
 Authorization: Bearer <token>
@@ -225,6 +238,7 @@ Content-Type: application/json
 ```
 
 **Response:**
+
 ```json
 {
   "message": "Verification code sent"
@@ -232,6 +246,7 @@ Content-Type: application/json
 ```
 
 #### Verify Phone
+
 ```http
 POST /user/profile/phone/verify
 Authorization: Bearer <token>
@@ -245,6 +260,7 @@ Content-Type: application/json
 ## Environment Configuration
 
 ### Development Mode (.env.local)
+
 ```bash
 NODE_ENV=development
 LOCAL_STORAGE_PATH=./uploads
@@ -252,6 +268,7 @@ MINIO_* variables can be empty (not used)
 ```
 
 ### Production Mode (.env)
+
 ```bash
 NODE_ENV=production
 LOCAL_STORAGE_PATH=./uploads (optional, ignored)
@@ -316,26 +333,28 @@ MINIO_MEDIA_BUCKET=media
 
 ### Common Errors
 
-| Status | Error | Cause |
-|--------|-------|-------|
-| 400 | Invalid file | File exceeds 5MB or unsupported mimetype |
-| 400 | Invalid phone number | Phone number format incorrect |
-| 400 | Invalid verification code | Code doesn't match or expired |
-| 409 | Username already taken | Duplicate username |
-| 409 | NIP already registered | Business with same NIP exists |
-| 404 | Profile not found | Profile doesn't exist for user |
-| 500 | File upload failed | MinIO/storage error |
+| Status | Error                     | Cause                                    |
+| ------ | ------------------------- | ---------------------------------------- |
+| 400    | Invalid file              | File exceeds 5MB or unsupported mimetype |
+| 400    | Invalid phone number      | Phone number format incorrect            |
+| 400    | Invalid verification code | Code doesn't match or expired            |
+| 409    | Username already taken    | Duplicate username                       |
+| 409    | NIP already registered    | Business with same NIP exists            |
+| 404    | Profile not found         | Profile doesn't exist for user           |
+| 500    | File upload failed        | MinIO/storage error                      |
 
 ## Validation Rules
 
 ### Profile Fields
+
 - **firstName**: 1-50 chars
 - **lastName**: 1-50 chars
 - **username**: 3-30 chars, alphanumeric + underscore/hyphen
 - **bio**: 0-500 chars
-- **interests**: Max 10 tags, each 50 chars max
+- **favoriteCategories**: Unique values from the event category enum
 
 ### Business Fields
+
 - **businessName**: 2-100 chars
 - **nip**: Exactly 10 digits
 - **businessDescription**: 0-1000 chars
@@ -346,21 +365,25 @@ MINIO_MEDIA_BUCKET=media
 ### Setup
 
 1. Install dependencies:
+
 ```bash
 pnpm install
 ```
 
 2. Create `.env.local`:
+
 ```bash
 cp .env.example .env.local
 ```
 
 3. Ensure uploads directory exists:
+
 ```bash
 mkdir -p uploads/avatars uploads/media
 ```
 
 4. Run migrations:
+
 ```bash
 pnpm db:push
 ```
@@ -392,12 +415,14 @@ curl -X PATCH \
 ### Debugging
 
 Enable debug logging:
+
 ```bash
 # In your terminal
 DEBUG=* pnpm start:dev
 ```
 
 Check stored files:
+
 ```bash
 # Local storage
 ls -la ./uploads/avatars/

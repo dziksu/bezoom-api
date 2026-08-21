@@ -128,7 +128,7 @@ describe('ProfileService phone verification', () => {
       isPhoneVerified: true,
       bio: 'Public bio',
       avatarUrl: null,
-      interests: ['music'],
+      favoriteCategories: ['MUSIC_AND_NIGHTLIFE'],
       followersCount: 2,
       followingCount: 3,
       isPrivate: false,
@@ -149,7 +149,12 @@ describe('ProfileService phone verification', () => {
 
     const result = await service.getProfileById(profile.id);
 
-    expect(result).toMatchObject({ id: profile.id, username: 'jan', bio: 'Public bio' });
+    expect(result).toMatchObject({
+      id: profile.id,
+      username: 'jan',
+      bio: 'Public bio',
+      favoriteCategories: ['MUSIC_AND_NIGHTLIFE']
+    });
     expect(result).not.toHaveProperty('keycloakSub');
     expect(result).not.toHaveProperty('email');
     expect(result).not.toHaveProperty('phoneNumber');

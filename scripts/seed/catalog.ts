@@ -368,23 +368,6 @@ export const lastNames = [
   'Zieliński'
 ];
 
-export const interests = [
-  'sztuka',
-  'muzyka',
-  'sport',
-  'technologia',
-  'jedzenie',
-  'podróże',
-  'rodzina',
-  'wellness',
-  'biznes',
-  'natura',
-  'fotografia',
-  'książki',
-  'taniec',
-  'wolontariat'
-];
-
 export const commentBodies = [
   'Brzmi świetnie, kto jeszcze się wybiera?',
   'Byłam na poprzedniej edycji i bardzo polecam.',

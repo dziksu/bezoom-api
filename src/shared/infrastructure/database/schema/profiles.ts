@@ -11,6 +11,7 @@ import {
   index,
   uniqueIndex
 } from 'drizzle-orm/pg-core';
+import { eventCategoryEnum } from './events';
 
 /**
  * User Profiles Table
@@ -40,8 +41,8 @@ export const profiles = pgTable(
     avatarUrl: text('avatar_url'), // S3/MinIO URL to avatar
     avatarStoragePath: text('avatar_storage_path'), // Storage path for cleanup
 
-    // Interests and tags
-    interests: text('interests').array(), // Array of interest tags
+    // Event discovery preferences
+    favoriteCategories: eventCategoryEnum('favorite_categories').array(),
 
     // Business/Company specific (if accountType === 'business')
     businessName: text('business_name'),

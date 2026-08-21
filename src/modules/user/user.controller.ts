@@ -116,7 +116,7 @@ export class UserController {
   @ApiOperation({
     summary: 'Update user profile',
     description:
-      'Update Bezoom profile data (nick, bio, interests and privacy). Email, first name, last name, password, MFA and sessions are managed by Keycloak Account Console.'
+      'Update Bezoom profile data (nick, bio, favorite event categories and privacy). Email, first name, last name, password, MFA and sessions are managed by Keycloak Account Console.'
   })
   @ApiResponse({
     status: 200,

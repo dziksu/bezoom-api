@@ -6,7 +6,6 @@ import {
   commentBodies,
   eventCopy,
   firstNames,
-  interests,
   lastNames,
   performanceCities,
   type CityDefinition,
@@ -473,7 +472,7 @@ async function seedProfiles(client: Client, config: ScaleDefinition, options: Se
     const createdAt = daysAgo(options.referenceNow, Math.floor(1 + random() ** 2 * 540));
     const statusRoll = creator ? 0 : random();
     const accountStatus = statusRoll < 0.98 ? 'ACTIVE' : 'DEACTIVATED';
-    const selectedInterests = [...interests].sort(() => random() - 0.5).slice(0, 2 + Math.floor(random() * 4));
+    const favoriteCategories = [...categories].sort(() => random() - 0.5).slice(0, 2 + Math.floor(random() * 4));
     rows.push([
       uuid(`profile:${index}`),
       profileSub(index),
@@ -486,7 +485,7 @@ async function seedProfiles(client: Client, config: ScaleDefinition, options: Se
         ? `Organizuję ciekawe wydarzenia w okolicy. ${pick(random, eventCopy[pick(random, categories)].details)}.`
         : 'Lubię odkrywać lokalne miejsca i poznawać ludzi.',
       options.withMedia ? avatarPhotoUrl(index) : null,
-      selectedInterests,
+      favoriteCategories,
       creator || random() < 0.65,
       creator ? Math.floor(20 + Math.exp(Math.min(7, 2 + normal(random)))) : Math.floor(random() * 25),
       Math.floor(random() * 120),
@@ -510,7 +509,7 @@ async function seedProfiles(client: Client, config: ScaleDefinition, options: Se
       'email',
       'bio',
       'avatar_url',
-      'interests',
+      'favorite_categories',
       'is_phone_verified',
       'followers_count',
       'following_count',

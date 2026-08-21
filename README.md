@@ -191,7 +191,7 @@ Avatar jest opcjonalny i można go dodać podczas onboardingu lub później prze
 
 ## Zarządzanie kontem i usunięcie danych
 
-`GET /api/user/account` zwraca stan konta oraz URL Keycloak Account Console. Keycloak jest jedynym miejscem zmiany emaila, hasła, MFA/WebAuthn, aktywnych sesji i powiązanych dostawców tożsamości. `PATCH /api/user/profile` modyfikuje wyłącznie dane domenowe BeZoom: nick, bio, zainteresowania i prywatność. Imię, nazwisko i zweryfikowany email są synchronizowane wyłącznie z nowszego tokenu Keycloak, więc stary token nie cofnie zmiany emaila.
+`GET /api/user/account` zwraca stan konta oraz URL Keycloak Account Console. Keycloak jest jedynym miejscem zmiany emaila, hasła, MFA/WebAuthn, aktywnych sesji i powiązanych dostawców tożsamości. `PATCH /api/user/profile` modyfikuje wyłącznie dane domenowe BeZoom: nick, bio, ulubione kategorie wydarzeń i prywatność. Imię, nazwisko i zweryfikowany email są synchronizowane wyłącznie z nowszego tokenu Keycloak, więc stary token nie cofnie zmiany emaila.
 
 - `POST /api/user/account/deactivate` — odwracalna deaktywacja i wylogowanie sesji Keycloak;
 - `POST /api/user/account/reactivate` — reaktywacja po ponownym uwierzytelnieniu;

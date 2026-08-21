@@ -7,6 +7,7 @@ A **complete, production-ready profile management module** for BeZoom that fulfi
 ## 📦 Components Created
 
 ### 1. **File Storage Service** (`src/shared/infrastructure/storage/`)
+
 - **FileStorageService**: Abstraction layer for file storage
 - Dual-mode operation: Local disk (dev) + MinIO (production)
 - Features:
@@ -17,7 +18,9 @@ A **complete, production-ready profile management module** for BeZoom that fulfi
   - Ready for Cloudflare R2 migration (same S3 API)
 
 ### 2. **Database Schema** (`src/shared/infrastructure/database/schema/profiles.ts`)
+
 Enhanced profiles table with:
+
 - Account type support (personal/business)
 - Business profile fields (NIP, name, description, website)
 - Avatar storage tracking
@@ -29,7 +32,9 @@ Enhanced profiles table with:
 Migration file: `0001_enhance_profiles.sql`
 
 ### 3. **Profile Service** (`src/modules/user/services/profile.service.ts`)
+
 Comprehensive business logic layer with:
+
 - Profile CRUD operations (personal & business)
 - Avatar upload/deletion with automatic cleanup
 - Phone verification workflow
@@ -39,7 +44,9 @@ Comprehensive business logic layer with:
 - Database transaction support
 
 ### 4. **DTOs** (`src/modules/user/dto/profile.dto.ts`)
+
 Validation schemas for:
+
 - `UpdateProfileDto` - Personal profile updates
 - `CreateBusinessProfileDto` - Business profile creation
 - `UpdateBusinessProfileDto` - Business profile updates
@@ -48,7 +55,9 @@ Validation schemas for:
 - `ProfileResponseDto` - API response format
 
 ### 5. **User Controller** (`src/modules/user/user.controller.ts`)
+
 RESTful endpoints:
+
 - **Personal Profile**: GET, PATCH
 - **Avatar Management**: POST, DELETE
 - **Business Profile**: POST (create), PATCH (update)
@@ -57,17 +66,20 @@ RESTful endpoints:
 - All endpoints properly documented in Swagger
 
 ### 6. **Module Setup**
+
 - **UserModule**: Updated with ProfileService & StorageModule
 - **StorageModule**: New dedicated module for file storage abstraction
 - **AppModule**: Integrated StorageModule as global dependency
 
 ### 7. **Configuration**
+
 - Enhanced `.env.example` with file storage variables
 - `NODE_ENV` support for development/production modes
 - `LOCAL_STORAGE_PATH` for configurable upload directory
 - MinIO credentials configuration ready
 
 ### 8. **Documentation**
+
 - `PROFILE_MODULE.md` - Complete module documentation
 - API endpoint reference with examples
 - Database schema documentation
@@ -83,7 +95,7 @@ RESTful endpoints:
 - email: text
 - phone_number: text
 - avatar_storage_path: text (for cleanup)
-- interests: text[] (array of tags)
+- favorite_categories: event_category[] (favorite event categories)
 - business_name: text
 - nip: varchar(10) (unique business ID)
 - business_description: text
@@ -107,6 +119,7 @@ RESTful endpoints:
 ## 🚀 API Endpoints
 
 ### Personal Profile
+
 ```
 GET    /user/profile              - Get current user's profile
 GET    /user/profile/:id          - Get public profile
@@ -116,12 +129,14 @@ DELETE /user/profile/avatar       - Delete avatar
 ```
 
 ### Business Profile
+
 ```
 POST   /user/profile/business     - Create business profile
 PATCH  /user/profile/business     - Update business profile
 ```
 
 ### Phone Verification
+
 ```
 POST   /user/profile/phone/request-verification  - Request SMS code
 POST   /user/profile/phone/verify                - Verify phone
@@ -130,16 +145,19 @@ POST   /user/profile/phone/verify                - Verify phone
 ## 🎯 Key Features
 
 ✅ **Dual-Mode File Storage**
+
 - Development: Local disk at `./uploads`
 - Production: MinIO S3-compatible storage
 - No code changes needed for production!
 
 ✅ **Automatic File Cleanup**
+
 - Old avatars deleted when new ones uploaded
 - Prevents disk/storage bloat
 - Maintains storage efficiency
 
 ✅ **Comprehensive Validation**
+
 - File size limits (5MB)
 - MIME type validation
 - Phone number format validation
@@ -148,6 +166,7 @@ POST   /user/profile/phone/verify                - Verify phone
 - Proper error messages
 
 ✅ **Privacy & Security**
+
 - Private profile support
 - Phone verification workflow
 - Business verification status tracking
@@ -155,12 +174,14 @@ POST   /user/profile/phone/verify                - Verify phone
 - Role-based access control ready
 
 ✅ **Database Performance**
+
 - Optimized indexes on frequently queried fields
 - Account type filtering support
 - Business verification status queries
 - Phone verification status tracking
 
 ✅ **Swagger Documentation**
+
 - All endpoints fully documented
 - Request/response examples
 - Error codes documented
@@ -169,12 +190,14 @@ POST   /user/profile/phone/verify                - Verify phone
 ## 🔧 Development Setup
 
 ### 1. Install Dependencies
+
 ```bash
 cd bezoom-api
 pnpm install
 ```
 
 ### 2. Configure Environment
+
 ```bash
 # Copy and update .env.local
 cp .env.example .env.local
@@ -185,11 +208,13 @@ LOCAL_STORAGE_PATH=./uploads
 ```
 
 ### 3. Create Uploads Directory
+
 ```bash
 mkdir -p uploads/avatars uploads/media
 ```
 
 ### 4. Apply Database Migration
+
 ```bash
 # Generate migration
 pnpm db:generate
@@ -199,18 +224,20 @@ pnpm db:push
 ```
 
 ### 5. Start Development Server
+
 ```bash
 pnpm start:dev
 ```
 
 ### 6. Test Endpoints
+
 Open Swagger UI: `http://localhost:4000/api`
 
 ## 📦 Dependencies Added
 
 ```json
 {
-  "minio": "^8.0.0"  // S3-compatible client for production
+  "minio": "^8.0.0" // S3-compatible client for production
 }
 ```
 
@@ -221,6 +248,7 @@ Note: MinIO is only used in production. Development mode uses native Node.js fs 
 When ready to switch to Cloudflare R2:
 
 1. **Update Environment Variables:**
+
 ```bash
 NODE_ENV=production
 MINIO_ENDPOINT=<account-id>.r2.cloudflarestorage.com
@@ -231,13 +259,14 @@ MINIO_SECRET_KEY=<r2-secret-key>
 ```
 
 2. **No Code Changes Needed!**
-The FileStorageService uses the MinIO client which is fully compatible with Cloudflare R2's S3 API.
+   The FileStorageService uses the MinIO client which is fully compatible with Cloudflare R2's S3 API.
 
 ## ⚠️ TODO: Phone Verification SMS Integration
 
 The phone verification flow is implemented but needs SMS service integration:
 
 **Current Implementation:**
+
 ```typescript
 // In ProfileService.requestPhoneVerification()
 const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -246,6 +275,7 @@ this.logger.log(`Phone verification code for ${phoneNumber}: ${verificationCode}
 ```
 
 **To Complete:**
+
 1. Choose SMS provider (e.g., Twilio, AWS SNS, SendGrid)
 2. Install SDK
 3. Create `PhoneVerificationService`
@@ -253,6 +283,7 @@ this.logger.log(`Phone verification code for ${phoneNumber}: ${verificationCode}
 5. Add SMS configuration to environment variables
 
 **Example with Twilio:**
+
 ```typescript
 import * as twilio from 'twilio';
 
@@ -300,6 +331,7 @@ src/shared/infrastructure/database/migrations/
 ## 🧪 Testing Examples
 
 ### Upload Avatar
+
 ```bash
 curl -X POST http://localhost:4000/user/profile/avatar \
   -H "Authorization: Bearer <token>" \
@@ -307,6 +339,7 @@ curl -X POST http://localhost:4000/user/profile/avatar \
 ```
 
 ### Update Profile
+
 ```bash
 curl -X PATCH http://localhost:4000/user/profile \
   -H "Authorization: Bearer <token>" \
@@ -315,11 +348,12 @@ curl -X PATCH http://localhost:4000/user/profile \
     "firstName": "John",
     "lastName": "Doe",
     "bio": "I love events!",
-    "interests": ["music", "sports"]
+    "favoriteCategories": ["MUSIC_AND_NIGHTLIFE", "SPORT_AND_RECREATION"]
   }'
 ```
 
 ### Create Business Profile
+
 ```bash
 curl -X POST http://localhost:4000/user/profile/business \
   -H "Authorization: Bearer <token>" \
@@ -358,7 +392,7 @@ curl -X POST http://localhost:4000/user/profile/business \
 
 1. **SMS Integration**: Complete phone verification with actual SMS provider
 2. **Profile Completion**: Add endpoint to check profile completion percentage
-3. **Profile Search**: Add endpoints to search profiles by interests
+3. **Recommendations**: Personalize event discovery using favorite categories
 4. **Social Graph**: Implement followers/following relationships
 5. **Email Verification**: Add email verification workflow
 6. **Profile Image Optimization**: Add image cropping and optimization
@@ -368,6 +402,7 @@ curl -X POST http://localhost:4000/user/profile/business \
 ## 📞 Support
 
 For questions or issues:
+
 1. Check `PROFILE_MODULE.md` for detailed documentation
 2. Review API examples in Swagger UI
 3. Check console logs for debugging

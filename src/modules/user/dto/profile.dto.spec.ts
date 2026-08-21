@@ -17,4 +17,23 @@ describe('UpdateProfileDto', () => {
     expect(await validate(transform({ isPrivate: false }))).toHaveLength(0);
     expect(await validate(transform({ isPrivate: 'false' }))).not.toHaveLength(0);
   });
+
+  it('accepts unique event categories', async () => {
+    const dto = transform({
+      favoriteCategories: ['MUSIC_AND_NIGHTLIFE', 'ARTS_AND_CULTURE']
+    });
+
+    await expect(validate(dto)).resolves.toHaveLength(0);
+  });
+
+  it.each([
+    [['music'], 'an arbitrary tag'],
+    [['MUSIC_AND_NIGHTLIFE', 'MUSIC_AND_NIGHTLIFE'], 'duplicates']
+  ])('rejects %s (%s)', async (favoriteCategories) => {
+    const dto = transform({ favoriteCategories });
+
+    const errors = await validate(dto);
+
+    expect(errors).toEqual(expect.arrayContaining([expect.objectContaining({ property: 'favoriteCategories' })]));
+  });
 });
