@@ -7,6 +7,7 @@ import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.
 import { ObjectStorageService } from '@api/shared/infrastructure/storage/object-storage.service';
 import type { MapEventPinDto, MapEventsResponseDto } from '../../dto/event-response.dto';
 import { GetMapEventsQuery } from './get-map-events.query';
+import type { EventCategory } from '../../../domain/event.aggregate';
 import {
   boundsCoveringSectors,
   countSectorsForBounds,
@@ -29,7 +30,7 @@ export const MAX_MAP_COUNT_SECTORS = 256;
 interface MapPinRow {
   id: string;
   title: string;
-  category: string;
+  category: EventCategory;
   start_date: Date | string;
   end_date: Date | string | null;
   organizer_id: string | null;

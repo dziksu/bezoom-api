@@ -12,7 +12,7 @@ import {
   IsBoolean
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
 /**
  * Update Personal Profile DTO
@@ -147,6 +147,25 @@ export class RequestPhoneVerificationDto {
   phoneNumber: string;
 }
 
+export class PhoneVerificationRequestResponseDto {
+  @ApiProperty({ enum: ['PHONE_VERIFICATION_CODE_SENT'] })
+  status: 'PHONE_VERIFICATION_CODE_SENT';
+
+  @ApiProperty({ description: 'Number of seconds before the verification code expires.' })
+  expiresInSeconds: number;
+}
+
+export class LegacyProfileInfoResponseDto {
+  @ApiProperty()
+  userId: string;
+
+  @ApiPropertyOptional()
+  email?: string;
+
+  @ApiPropertyOptional()
+  username?: string;
+}
+
 /**
  * Profile Response DTO
  * Returned from endpoints
@@ -155,28 +174,28 @@ export class ProfileResponseDto {
   @ApiProperty()
   id: string;
 
-  @ApiProperty()
+  @ApiProperty({ enum: ['personal', 'business'] })
   accountType: 'personal' | 'business';
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   firstName?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   lastName?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   username?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   email?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   bio?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional()
   avatarUrl?: string;
 
-  @ApiProperty()
+  @ApiPropertyOptional({ type: [String] })
   interests?: string[];
 
   @ApiProperty()

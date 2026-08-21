@@ -3,6 +3,7 @@ import { IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-valida
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   moderationReportReasons,
+  moderationReportStatuses,
   type ModerationReportReason,
   type ModerationReportStatus
 } from '@api/shared/infrastructure/database/schema/moderation-reports';
@@ -34,7 +35,7 @@ export class EventReportResponseDto {
   @ApiPropertyOptional()
   description?: string;
 
-  @ApiProperty({ example: 'PENDING' })
+  @ApiProperty({ enum: moderationReportStatuses, example: 'PENDING' })
   status: ModerationReportStatus;
 
   @ApiProperty()

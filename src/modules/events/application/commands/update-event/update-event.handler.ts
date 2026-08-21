@@ -135,14 +135,12 @@ export class UpdateEventHandler implements ICommandHandler<UpdateEventCommand, E
     });
   }
 
-  private lifecycle(event: {
-    id: string;
-    status: string;
-    mediaPipelineStatus: string;
-    verificationStatus: string;
-    archivedAt?: Date;
-    updatedAt: Date;
-  }): EventLifecycleResponseDto {
+  private lifecycle(
+    event: Pick<
+      EventLifecycleResponseDto,
+      'id' | 'status' | 'mediaPipelineStatus' | 'verificationStatus' | 'archivedAt' | 'updatedAt'
+    >
+  ): EventLifecycleResponseDto {
     return {
       id: event.id,
       status: event.status,

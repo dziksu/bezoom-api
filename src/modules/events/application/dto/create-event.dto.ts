@@ -23,9 +23,7 @@ import {
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { EVENT_CATEGORIES, type EventCategory } from '../../domain/event.aggregate';
-import type { PriceType } from '../../domain/value-objects/price.vo';
-
-const PRICE_TYPES: PriceType[] = ['FREE', 'FIXED', 'RANGE', 'DONATION'];
+import { PRICE_TYPES, type PriceType } from '../../domain/value-objects/price.vo';
 
 @ValidatorConstraint({ name: 'IsFutureDate', async: false })
 class IsFutureDateConstraint implements ValidatorConstraintInterface {

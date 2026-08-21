@@ -23,10 +23,13 @@ export const EVENT_CATEGORIES = [
 ] as const;
 export type EventCategory = (typeof EVENT_CATEGORIES)[number];
 
-export type EventStatus = 'DRAFT' | 'UPLOADED' | 'READY' | 'PUBLISHED' | 'REJECTED' | 'CANCELLED';
+export const EVENT_STATUSES = ['DRAFT', 'UPLOADED', 'READY', 'PUBLISHED', 'REJECTED', 'CANCELLED'] as const;
+export type EventStatus = (typeof EVENT_STATUSES)[number];
 export type EventVisibility = 'PUBLIC' | 'PRIVATE';
-export type VerificationStatus = 'UNVERIFIED' | 'VERIFIED' | 'REJECTED';
-export type MediaPipelineStatus = 'UPLOADED' | 'REJECTED' | 'NEEDS_REVIEW' | 'APPROVED' | 'READY';
+export const VERIFICATION_STATUSES = ['UNVERIFIED', 'VERIFIED', 'REJECTED'] as const;
+export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
+export const MEDIA_PIPELINE_STATUSES = ['UPLOADED', 'REJECTED', 'NEEDS_REVIEW', 'APPROVED', 'READY'] as const;
+export type MediaPipelineStatus = (typeof MEDIA_PIPELINE_STATUSES)[number];
 
 // Reach is controlled by the backend and is never accepted from a client.
 // New events begin in the nearest discovery ring; later engagement policies may

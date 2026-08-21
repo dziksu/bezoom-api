@@ -24,7 +24,9 @@ import {
   RequestPhoneVerificationDto,
   VerifyPhoneDto,
   ProfileResponseDto,
-  PublicProfileResponseDto
+  PublicProfileResponseDto,
+  PhoneVerificationRequestResponseDto,
+  LegacyProfileInfoResponseDto
 } from './dto/profile.dto';
 import { CursorQueryDto } from '@api/modules/events/application/dto/cursor-query.dto';
 import { CursorAttendingEventsDto, CursorEventsDto } from '@api/modules/events/application/dto/event-response.dto';
@@ -219,7 +221,8 @@ export class UserController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Verification code sent successfully'
+    description: 'Verification code sent successfully',
+    type: PhoneVerificationRequestResponseDto
   })
   @ApiResponse({ status: 400, description: 'Invalid phone number' })
   @Post('profile/phone/request-verification')
@@ -227,7 +230,10 @@ export class UserController {
     { name: 'phone_otp_request_user', limit: 5, windowSeconds: 3600, scopes: ['user'] },
     { name: 'phone_otp_request_ip', limit: 30, windowSeconds: 3600, scopes: ['ip'] }
   )
-  async requestPhoneVerification(@CurrentUser() user: ICurrentUser, @Body() requestDto: RequestPhoneVerificationDto) {
+  async requestPhoneVerification(
+    @CurrentUser() user: ICurrentUser,
+    @Body() requestDto: RequestPhoneVerificationDto
+  ): Promise<PhoneVerificationRequestResponseDto> {
     return this.profileService.requestPhoneVerification(
       user.id,
       requestDto,
@@ -276,9 +282,9 @@ export class UserController {
     summary: 'Get user profile (legacy)',
     description: "Returns the authenticated user's profile information including username, email, and user ID."
   })
-  @ApiResponse({ status: 200, description: 'User profile returned successfully' })
+  @ApiResponse({ status: 200, description: 'User profile returned successfully', type: LegacyProfileInfoResponseDto })
   @Get('info')
-  getProfileInfo(@CurrentUser() user: ICurrentUser) {
+  getProfileInfo(@CurrentUser() user: ICurrentUser): LegacyProfileInfoResponseDto {
     return {
       userId: user.id,
       email: user.email,

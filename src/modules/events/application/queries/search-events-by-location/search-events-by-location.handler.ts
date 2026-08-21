@@ -9,7 +9,13 @@ import { SearchEventsByLocationQuery } from './search-events-by-location.query';
 import type { EventSearchResponseDto } from '../../dto/event-response.dto';
 import { RedisCacheService } from '@api/shared/infrastructure/cache/redis-cache.service';
 import { decodeGeoCursor, encodeGeoCursor } from '@api/shared/domain/cursor-pagination';
-import { NATIONAL_EVENT_REACH_RADIUS_KM } from '../../../domain/event.aggregate';
+import {
+  NATIONAL_EVENT_REACH_RADIUS_KM,
+  type EventCategory,
+  type EventStatus,
+  type VerificationStatus
+} from '../../../domain/event.aggregate';
+import type { PriceType } from '../../../domain/value-objects/price.vo';
 
 // The maximum national reach bounds the indexed candidate scan. Each event is
 // then filtered against its own reach, so Nearby events stay truly nearby.
@@ -21,20 +27,20 @@ interface SearchRow {
   id: string;
   title: string;
   description: string;
-  category: string;
+  category: EventCategory;
   start_date: Date | string;
   end_date: Date | string | null;
   organizer_id: string | null;
   submitted_by_is_organizer: boolean;
-  price_type: string | null;
+  price_type: PriceType | null;
   price_min: string | null;
   price_max: string | null;
   currency: string | null;
   ticket_url: string | null;
   price_notes: string | null;
   amenities: string[] | null;
-  status: string;
-  verification_status: string;
+  status: EventStatus;
+  verification_status: VerificationStatus;
   created_at: Date | string;
   latitude: string;
   longitude: string;

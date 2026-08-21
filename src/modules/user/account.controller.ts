@@ -25,6 +25,7 @@ export class AccountController {
   @Post('deactivate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Temporarily deactivate my Bezoom account' })
+  @ApiResponse({ status: 200, type: AccountLifecycleResponseDto })
   deactivate(@CurrentUser() user: ICurrentUser): Promise<AccountLifecycleResponseDto> {
     return this.accounts.deactivate(user);
   }
@@ -32,6 +33,7 @@ export class AccountController {
   @Post('reactivate')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reactivate my temporarily deactivated account' })
+  @ApiResponse({ status: 200, type: AccountLifecycleResponseDto })
   reactivate(@CurrentUser() user: ICurrentUser): Promise<AccountLifecycleResponseDto> {
     return this.accounts.reactivate(user);
   }
@@ -39,6 +41,7 @@ export class AccountController {
   @Delete()
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Schedule account deletion after the configured grace period' })
+  @ApiResponse({ status: 202, type: AccountLifecycleResponseDto })
   requestDeletion(@CurrentUser() user: ICurrentUser): Promise<AccountLifecycleResponseDto> {
     return this.accounts.requestDeletion(user);
   }
@@ -46,6 +49,7 @@ export class AccountController {
   @Post('deletion/cancel')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel a pending account deletion before anonymization starts' })
+  @ApiResponse({ status: 200, type: AccountLifecycleResponseDto })
   cancelDeletion(@CurrentUser() user: ICurrentUser): Promise<AccountLifecycleResponseDto> {
     return this.accounts.cancelDeletion(user);
   }

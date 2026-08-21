@@ -19,10 +19,8 @@ import {
 import { Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EVENT_CATEGORIES, type EventCategory } from '../../domain/event.aggregate';
-import type { PriceType } from '../../domain/value-objects/price.vo';
+import { PRICE_TYPES, type PriceType } from '../../domain/value-objects/price.vo';
 import { LocationDto } from './create-event.dto';
-
-const PRICE_TYPES: PriceType[] = ['FREE', 'FIXED', 'RANGE', 'DONATION'];
 
 export class UpdateEventDto {
   @ApiPropertyOptional({
@@ -55,7 +53,7 @@ export class UpdateEventDto {
   @IsISO8601()
   startDate?: string;
 
-  @ApiPropertyOptional({ nullable: true, description: 'Use null to remove the end date.' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Use null to remove the end date.' })
   @IsOptional()
   @IsISO8601()
   endDate?: string | null;
@@ -71,13 +69,13 @@ export class UpdateEventDto {
   @IsEnum(PRICE_TYPES)
   priceType?: PriceType;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(0)
   priceMin?: number | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: Number, nullable: true })
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -89,12 +87,12 @@ export class UpdateEventDto {
   @MaxLength(3)
   currency?: string;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @IsUrl()
   ticketUrl?: string | null;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @IsString()
   @MaxLength(500)

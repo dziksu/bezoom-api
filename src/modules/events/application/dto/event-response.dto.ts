@@ -1,4 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  EVENT_CATEGORIES,
+  EVENT_STATUSES,
+  MEDIA_PIPELINE_STATUSES,
+  VERIFICATION_STATUSES,
+  type EventCategory,
+  type EventStatus,
+  type MediaPipelineStatus,
+  type VerificationStatus
+} from '../../domain/event.aggregate';
+import { RSVP_STATUSES, type RsvpStatus } from '../../domain/engagement/rsvp-status';
+import { PRICE_TYPES, type PriceType } from '../../domain/value-objects/price.vo';
 
 export class EventPhotoResponseDto {
   @ApiProperty()
@@ -41,8 +53,8 @@ export class EventResponseDto {
   @ApiProperty()
   description: string;
 
-  @ApiProperty()
-  category: string;
+  @ApiProperty({ enum: EVENT_CATEGORIES })
+  category: EventCategory;
 
   @ApiProperty()
   startDate: Date;
@@ -79,8 +91,8 @@ export class EventResponseDto {
   @ApiProperty()
   country: string;
 
-  @ApiProperty()
-  priceType: string;
+  @ApiProperty({ enum: PRICE_TYPES })
+  priceType: PriceType;
 
   @ApiProperty({ required: false })
   priceMin?: number;
@@ -103,11 +115,11 @@ export class EventResponseDto {
   @ApiProperty({ type: [EventPhotoResponseDto] })
   photos: EventPhotoResponseDto[];
 
-  @ApiProperty()
-  status: string;
+  @ApiProperty({ enum: EVENT_STATUSES })
+  status: EventStatus;
 
-  @ApiProperty()
-  verificationStatus: string;
+  @ApiProperty({ enum: VERIFICATION_STATUSES })
+  verificationStatus: VerificationStatus;
 
   @ApiProperty({ required: false })
   verificationRejectionReason?: string;
@@ -120,14 +132,14 @@ export class EventLifecycleResponseDto {
   @ApiProperty()
   id: string;
 
-  @ApiProperty()
-  status: string;
+  @ApiProperty({ enum: EVENT_STATUSES })
+  status: EventStatus;
 
-  @ApiProperty()
-  mediaPipelineStatus: string;
+  @ApiProperty({ enum: MEDIA_PIPELINE_STATUSES })
+  mediaPipelineStatus: MediaPipelineStatus;
 
-  @ApiProperty()
-  verificationStatus: string;
+  @ApiProperty({ enum: VERIFICATION_STATUSES })
+  verificationStatus: VerificationStatus;
 
   @ApiPropertyOptional()
   archivedAt?: Date;
@@ -168,8 +180,8 @@ export class MapEventPinDto {
   @ApiProperty({ description: 'Public URL of the required event cover photo.' })
   coverPhotoUrl: string;
 
-  @ApiProperty()
-  category: string;
+  @ApiProperty({ enum: EVENT_CATEGORIES })
+  category: EventCategory;
 
   @ApiProperty()
   startDate: Date;
@@ -286,8 +298,8 @@ export class EventDetailDto extends EventResponseDto {
 }
 
 export class AttendingEventDto extends EventResponseDto {
-  @ApiProperty({ description: "The current user's RSVP status for this event" })
-  myRsvpStatus: string;
+  @ApiProperty({ enum: RSVP_STATUSES, description: "The current user's RSVP status for this event" })
+  myRsvpStatus: RsvpStatus;
 }
 
 export class MyEventStatsDto {

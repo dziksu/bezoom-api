@@ -2,6 +2,7 @@ import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '@api/shared/infrastructure/auth';
 import { HealthService } from './health.service';
+import { HealthResponseDto, ReadinessResponseDto } from './health.dto';
 
 @ApiTags('Health')
 @Controller('health')
@@ -15,8 +16,8 @@ export class HealthController {
     description:
       'Returns the current health status of the API. This endpoint is unauthenticated and suitable for load balancer probes.'
   })
-  @ApiResponse({ status: 200, description: 'Service is healthy' })
-  live() {
+  @ApiResponse({ status: 200, description: 'Service is healthy', type: HealthResponseDto })
+  live(): HealthResponseDto {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -27,17 +28,17 @@ export class HealthController {
   @Public()
   @Get('live')
   @ApiOperation({ summary: 'Liveness probe' })
-  @ApiResponse({ status: 200, description: 'API process is alive' })
-  liveness() {
+  @ApiResponse({ status: 200, description: 'API process is alive', type: HealthResponseDto })
+  liveness(): HealthResponseDto {
     return this.live();
   }
 
   @Public()
   @Get('ready')
   @ApiOperation({ summary: 'Readiness probe' })
-  @ApiResponse({ status: 200, description: 'Required dependencies are reachable' })
+  @ApiResponse({ status: 200, description: 'Required dependencies are reachable', type: ReadinessResponseDto })
   @ApiResponse({ status: 503, description: 'At least one required dependency is unavailable' })
-  async readiness() {
+  async readiness(): Promise<ReadinessResponseDto> {
     const result = await this.health.readiness();
     if (!result.ready) {
       const dependencies = Object.entries(result.checks)

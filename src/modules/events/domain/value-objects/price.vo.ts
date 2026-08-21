@@ -1,6 +1,7 @@
 import { DomainValidationError } from '../events.errors';
 
-export type PriceType = 'FREE' | 'FIXED' | 'RANGE' | 'DONATION';
+export const PRICE_TYPES = ['FREE', 'FIXED', 'RANGE', 'DONATION'] as const;
+export type PriceType = (typeof PRICE_TYPES)[number];
 
 export interface PriceInput {
   priceType: PriceType;
